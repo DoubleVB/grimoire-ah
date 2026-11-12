@@ -1,0 +1,40 @@
+name: Scan AH
+on:
+  schedule:
+    - cron: "17 * * * *"   # every hour (Blizzard publishes new auction data about once an hour)
+  workflow_dispatch:        # "Run workflow" button to test by hand
+permissions:
+  contents: write
+concurrency: scan-ah
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the previous data (branch "data")
+        run: |
+          git fetch origin data --depth=1 2>/dev/null && git checkout FETCH_HEAD -- latest.json snaps.json 2>/dev/null && mv latest.json snaps.json data/ || echo "First run: no data yet"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch the auction house
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+          REGION: ${{ vars.REGION || 'eu' }}
+          NAMESPACE: ${{ vars.NAMESPACE || 'dynamic-forever-eu' }}
+          RULESET: ${{ vars.RULESET }}
+          AH_IDS: ${{ vars.AH_IDS }}
+          KEEP_DAYS: "7"
+        run: node scripts/fetch-ah.mjs
+      - name: Publish the data (branch "data", one commit, no history so the repo stays small)
+        run: |
+          [ -f data/latest.json ] || exit 0
+          mkdir -p /tmp/out && cp data/latest.json data/snaps.json /tmp/out/
+          cd /tmp/out
+          git init -q -b data
+          git config user.name "grimoire-bot"
+          git config user.email "grimoire-bot@users.noreply.github.com"
+          git add . && git commit -qm "AH scan $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
