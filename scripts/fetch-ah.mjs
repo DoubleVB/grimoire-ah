@@ -34,8 +34,9 @@ async function auctionsOf(tok, id) {
   for (const base of [`/data/wow/ruleset/${RULESET}/auctions/${id}`, `/data/wow/connected-realm/${RULESET}/auctions/${id}`]) {
     const h = await api(tok, base);
     if (!h) continue;
-    let all = [...(h.auctions || []), ...(h.commodities || [])];
-    if (!h.commodities) { const c = await api(tok, base + "/commodities"); if (c && c.auctions) all = all.concat(c.auctions); }
+    let all = Array.isArray(h.auctions) ? [...h.auctions] : [];
+    if (Array.isArray(h.commodities)) all = all.concat(h.commodities);
+    else { const c = await api(tok, base + "/commodities"); if (c && Array.isArray(c.auctions)) all = all.concat(c.auctions); }
     if (all.length) return all;
   }
   return [];
