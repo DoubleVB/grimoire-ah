@@ -480,6 +480,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hgrid{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1fr);gap:20px;align-items:start}
 @media (max-width:860px){.hgrid{grid-template-columns:minmax(0,1fr)}}
 .sold{font:700 15px var(--mono);color:var(--good)}
+.wait{font-size:12px;white-space:nowrap;cursor:help}
 .sold.zero{color:var(--muted);font-weight:400}
 .ptable td,.ptable th{padding:6px 8px;font-size:13px}
 .delta.down{color:var(--good);font-weight:700}.delta.up{color:var(--muted)}
@@ -1107,7 +1108,10 @@ function sold24(){
   for(const id in S.out) m.set(+id,{n:S.out[id].sold*k,est:span<1,span});
   return m;
 }
-const volCell=(V,id)=>{if(!V.size) return '<span class="muted" title="Needs at least 6 hours of AH scans from your current auction house">—</span>';
+// How much same-auction-house history we have in the last 24 h (the 24 h sales need 6 h of it)
+function histWait(){const S=salesStats(1);return {h:Math.max(0,S.span*24),n:S.pts.length}}
+const volCell=(V,id,W)=>{if(!V.size){W=W||histWait();const h=Math.min(5.9,W.h);
+    return `<span class="muted wait notr" title="${LANG==="fr"?(W.n<2?"Un seul scan de l’HV pour l’instant : les ventes se calculent à partir de la baisse des annonces entre deux scans.":"Collecte des scans en cours.")+" Il faut 6 h de scans de ton hôtel des ventes actuel (récupération auto toutes les 10 min, ou l’historique cloud).":(W.n<2?"Only one AH scan so far: sales are counted from the drop in listings between scans.":"Collecting scans.")+" Needs 6 h of scans from your current auction house (auto-fetch every 10 min, or the cloud history)."}">⏳ ${h<1?Math.round(h*60)+" min":h.toFixed(1).replace(/\.0$/,"")+" h"}/6 h</span>`}
   const v=V.get(id); if(!v) return '<span class="muted">0</span>';
   const n=Math.round(v.n); return `<b title="${v.est?`Extrapolated to 24h from ${fmtSpan(v.span)} of history`:"Observed over the last 24 hours"}">${v.est?"≈ ":""}${n.toLocaleString(LOC)}</b>`};
 function renderTable(){
@@ -1120,7 +1124,7 @@ function renderTable(){
     .filter(x=>!state.onlyPriced||!x.missing)
     .filter(x=>{if(!state.minAvg&&!state.minDays)return true;const st=stats(x.r.id);return !!st&&st.avgQty>=state.minAvg&&st.days>=state.minDays})
     .filter(x=>!q||nameOf(x.r.id)[0].toLowerCase().includes(q)||x.r.r.some(([id])=>nameOf(id)[0].toLowerCase().includes(q)));
-  const V=sold24();
+  const V=sold24(), W=V.size?null:histWait();
   const key={profit:x=>x.profit??-1e12, margin:x=>x.margin??-1e12, skill:x=>-x.r.skill, supply:x=>{const st=stats(x.r.id);return st?st.avgQty:-1}, vol:x=>{const v=V.get(x.r.id);return v?v.n:-1}, cost:x=>x.cost||(x.missing?-1e12:0), sale:x=>x.net??-1e12}[state.sort];
   const dir=state.sortAsc?-1:1;
   if(state.sort==="name") rows.sort((a,b)=>(b.acc.ok-a.acc.ok)||dir*nameOf(a.r.id)[0].localeCompare(nameOf(b.r.id)[0]));
@@ -1134,12 +1138,12 @@ function renderTable(){
     const st=stats(r.id);
     const sub=`${r.skill}${yl} · ${srcTxt(r)}${st?` · ${fmtQty(st.avgQty)}/day`:""}`;
     const prof=profitBadge(x.profit);
-    if(!x.acc.ok) return `<tr tabindex="0" data-key="${r.key}" class="locked ${r.key==state.selected?"sel":""}"><td class="name"><div class="nm">${ico(r.id)}<div>${en}${recBM(r)?" "+bmTag:""}<small>${sub}</small></div></div></td><td>${money(x.cost,true)}</td><td>${money(x.net,true)}</td><td>${prof}</td><td>${volCell(V,r.id)}</td><td><span class="pill lock" title="${x.acc.why}">${x.acc.short}</span></td></tr>`;
+    if(!x.acc.ok) return `<tr tabindex="0" data-key="${r.key}" class="locked ${r.key==state.selected?"sel":""}"><td class="name"><div class="nm">${ico(r.id)}<div>${en}${recBM(r)?" "+bmTag:""}<small>${sub}</small></div></div></td><td>${money(x.cost,true)}</td><td>${money(x.net,true)}</td><td>${prof}</td><td>${volCell(V,r.id,W)}</td><td><span class="pill lock" title="${x.acc.why}">${x.acc.short}</span></td></tr>`;
     let pill = x.missing?`<span class="mg na">${x.noSale?"not listed":"price?"}</span>`:`<span class="mg ${x.profit>0?"pos":"neg"}">${x.profit>0?"+":""}${pct(x.margin)}%</span>`;
     let tags=""; if(r.cd) tags+='<span class="tag cd" title="Cooldown">CD</span>';
     const av=state.prices&&state.prices[r.id]&&state.prices[r.id].avail;
     if(av!=null&&av<10&&state.manual[r.id]==null) tags+=`<span class="tag warn" title="Only ${av} listed: unreliable price">${av} listed</span>`;
-    return `<tr tabindex="0" data-key="${r.key}" class="${r.key==state.selected?"sel":""}"><td class="name"><div class="nm">${ico(r.id)}<div>${dot(r)}${en}${recBM(r)?" "+bmTag:""}<small>${sub}${tags}</small></div></div></td><td>${money(x.cost,true)}</td><td>${money(x.net,true)}</td><td>${prof}</td><td>${volCell(V,r.id)}</td><td>${pill}</td></tr>`}).join("");
+    return `<tr tabindex="0" data-key="${r.key}" class="${r.key==state.selected?"sel":""}"><td class="name"><div class="nm">${ico(r.id)}<div>${dot(r)}${en}${recBM(r)?" "+bmTag:""}<small>${sub}${tags}</small></div></div></td><td>${money(x.cost,true)}</td><td>${money(x.net,true)}</td><td>${prof}</td><td>${volCell(V,r.id,W)}</td><td>${pill}</td></tr>`}).join("");
 }
 function renderDetail(){
   const rec=recByKey(state.selected)||RECIPES[0];
@@ -2310,8 +2314,14 @@ async function cloudSync(manual){
     const [sr,lr]=await Promise.all([fetch(base+"snaps.json"+bust,{cache:"no-store"}),fetch(base+"latest.json"+bust,{cache:"no-store"})]);
     if(!sr.ok||!lr.ok) throw new Error(`HTTP ${sr.status}/${lr.status}: check the address (and that the repository is public)`);
     const sj=await sr.json(), lj=await lr.json();
-    const api=[...state.snaps].reverse().find(x=>x.src&&!/auctionator/i.test(x.src));
-    const lbl=api?api.src:"Blizzard API";
+    const api=[...state.snaps].reverse().find(x=>x.src&&!/auctionator/i.test(x.src)&&!/\(cloud\)|^cloud/i.test(x.src));
+    const cIds=(lj.ah||[]).map(String).sort().join(","), mine=(S.ahId?[S.ahId]:(S.ahIds||[])).map(String).sort().join(",");
+    if(cIds&&mine&&cIds!==mine){const fr=LANG==="fr";
+      msg("cloudMsg",fr?`Les données cloud viennent d’un autre hôtel des ventes (HV ${cIds}) ; le tien est l’HV ${mine}. Non fusionnées, pour ne pas mélanger les deux.`:`Cloud data comes from another auction house (AH ${cIds}); yours is AH ${mine}. Not merged, so the two don't mix.`,"err");
+      if(manual) quick(fr?"Données cloud d’un autre hôtel des ventes : non fusionnées.":"Cloud data is for another auction house: not merged.","err"); return}
+    const lbl=api&&mine?api.src:`Cloud · AH ${cIds||"?"}`;
+    // Same auction house as the user's own API scans: older cloud-only scans join the same history
+    if(api&&mine) state.snaps.forEach(x=>{if(x.src===`Cloud · AH ${cIds}`) x.src=api.src});
     let added=0;
     for(const c of (sj.snaps||[])){
       if(state.snaps.some(x=>Math.abs(x.t-c.t)<60000)) continue;
@@ -2332,6 +2342,8 @@ async function cloudSync(manual){
     if(manual||added) quick(`Cloud history: ${added} new scan${added>1?"s":""}${fresh?" + latest prices":""}.`,"ok");
   }catch(e){msg("cloudMsg","Cloud sync failed: "+e.message,"err"); if(manual) quick("Cloud sync failed: "+e.message,"err")}
 }
+// On the shared GitHub Pages site, visitors start with the owner's hourly cloud history (merged only if it is their auction house)
+if(location.hostname==="doublevb.github.io"&&load("cloudUrl",null)===null) save("cloudUrl","https://raw.githubusercontent.com/DoubleVB/grimoire-ah/data/");
 $("cloudUrl").value=load("cloudUrl","");
 $("cloudUrl").addEventListener("change",()=>{save("cloudUrl",$("cloudUrl").value.trim());cloudSync(true)});
 $("btnCloud").addEventListener("click",()=>cloudSync(true));
