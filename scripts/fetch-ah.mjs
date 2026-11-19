@@ -139,7 +139,8 @@ async function itemMeta(tok, houses) {
   const names = await readJson("data/names.json", { v: 1, ns: null, items: {}, classes: {} });
   const ids = new Set();
   for (const h of houses) { const l = await readJson(`data/ah/${h.key}/catalog.json`, null); if (l) Object.keys(l.items).forEach(id => ids.add(id)); }
-  const todo = [...ids].filter(id => !(id in names.items)).sort((a, b) => a - b).slice(0, NAMES_PER_RUN);
+  // New items first, then the ones the Forever database didn't know (0), retried once in the other Classic databases (-1 = nowhere)
+  const todo = [...[...ids].filter(id => !(id in names.items)).sort((a, b) => a - b), ...[...ids].filter(id => names.items[id] === 0)].slice(0, NAMES_PER_RUN);
   // Icons are Blizzard image files: remember the address they live at (same folder for every icon)
   if (!names.iconBase && names.ns) {
     try { const m = await apiNs(tok, "/data/wow/media/item/2589", names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) { names.iconBase = String(a.value).replace(/[^/]+$/, ""); await writeFile("data/names.json", JSON.stringify(names)); } } catch {}
@@ -157,10 +158,11 @@ async function itemMeta(tok, houses) {
     while (i < todo.length && Date.now() < deadline) {
       const id = todo[i++];
       try {
-        const it = await apiNs(tok, `/data/wow/item/${id}`, names.ns);
-        if (!it) { names.items[id] = 0; continue; }
+        let ns = names.ns, it = names.items[id] === 0 ? null : await apiNs(tok, `/data/wow/item/${id}`, ns);
+        if (!it) for (const alt of ["static-classic1x-" + REGION, "static-classic-" + REGION].filter(x => x !== names.ns)) { it = await apiNs(tok, `/data/wow/item/${id}`, alt); if (it) { ns = alt; break; } }
+        if (!it) { names.items[id] = -1; continue; }
         let icon = "";
-        try { const m = await apiNs(tok, `/data/wow/media/item/${id}`, names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) { icon = String(a.value).split("/").pop().replace(/\.jpg$/, ""); names.iconBase = names.iconBase || String(a.value).replace(/[^/]+$/, ""); } } catch {}
+        try { const m = await apiNs(tok, `/data/wow/media/item/${id}`, ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) { icon = String(a.value).split("/").pop().replace(/\.jpg$/, ""); if (ns === names.ns) names.iconBase = names.iconBase || String(a.value).replace(/[^/]+$/, ""); else icon = String(a.value); } } catch {}
         const c = it.item_class || {}, sc = it.item_subclass || {};
         if (c.id != null) names.classes[c.id] = [loc(c.name, "en_US"), loc(c.name, "fr_FR")];
         if (c.id != null && sc.id != null) names.classes[c.id + "-" + sc.id] = [loc(sc.name, "en_US"), loc(sc.name, "fr_FR")];
@@ -171,7 +173,8 @@ async function itemMeta(tok, houses) {
   }
   await Promise.all(Array.from({ length: 10 }, worker));
   await writeFile("data/names.json", JSON.stringify(names));
-  console.log(`Item names: +${done} this run, ${Object.keys(names.items).length} known, ${[...ids].filter(id => !(id in names.items)).length} left.`);
+  const v = Object.values(names.items);
+  console.log(`Item names: +${done} this run, ${v.filter(x => x && x !== -1).length} named, ${v.filter(x => x === 0).length} to retry, ${v.filter(x => x === -1).length} unknown, ${[...ids].filter(id => !(id in names.items)).length} not tried yet.`);
 }
 
 const tok = await token();
