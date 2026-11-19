@@ -139,13 +139,13 @@ async function itemMeta(tok, houses) {
   const names = await readJson("data/names.json", { v: 1, ns: null, items: {}, classes: {} });
   const ids = new Set();
   for (const h of houses) { const l = await readJson(`data/ah/${h.key}/catalog.json`, null); if (l) Object.keys(l.items).forEach(id => ids.add(id)); }
-  // New items first, then the ones the Forever database didn't know (0), retried once in the other Classic databases (-1 = nowhere)
+  // New items first, then the ones the Forever database didn't know (0), retried once in the other Classic databases (-1 = not at Blizzard, then Wowhead; -2 = nowhere)
   const todo = [...[...ids].filter(id => !(id in names.items)).sort((a, b) => a - b), ...[...ids].filter(id => names.items[id] === 0)].slice(0, NAMES_PER_RUN);
   // Icons are Blizzard image files: remember the address they live at (same folder for every icon)
   if (!names.iconBase && names.ns) {
     try { const m = await apiNs(tok, "/data/wow/media/item/2589", names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) { names.iconBase = String(a.value).replace(/[^/]+$/, ""); await writeFile("data/names.json", JSON.stringify(names)); } } catch {}
   }
-  if (!todo.length) { console.log(`Item names: complete (${Object.keys(names.items).length}).`); return; }
+  if (!todo.length && !Object.values(names.items).includes(-1)) { console.log(`Item names: complete (${Object.keys(names.items).length}).`); return; }
   if (!names.ns) {
     for (const ns of [NAMESPACE.replace(/^dynamic-/, "static-"), "static-classic1x-" + REGION, "static-classic-" + REGION]) {
       try { if (await apiNs(tok, "/data/wow/item/2589", ns)) { names.ns = ns; break; } } catch (e) { console.log(`Namespace ${ns}: ${e.message}`); }
@@ -172,9 +172,27 @@ async function itemMeta(tok, houses) {
     }
   }
   await Promise.all(Array.from({ length: 10 }, worker));
+  // Items Blizzard's databases don't know: Wowhead's public tooltips (name EN/FR, quality, icon, category, levels)
+  const miss = Object.keys(names.items).filter(id => names.items[id] === -1 && ids.has(id)).slice(0, NAMES_PER_RUN);
+  let wh = 0, j = 0;
+  async function whWorker() {
+    while (j < miss.length && Date.now() < deadline + 4 * 60000) {
+      const id = miss[j++];
+      try {
+        const [en, fr] = await Promise.all(["", "?locale=2"].map(q => fetch(`https://nether.wowhead.com/forever/tooltip/item/${id}${q}`).then(r => r.ok ? r.json() : null)));
+        if (!en || !en.name) { names.items[id] = -2; continue; }
+        const tip = String(en.tooltip || ""), sc = tip.match(/scstart(\d+):(\d+)/);
+        const req = tip.match(/Requires Level (\d+)/), il = tip.match(/Item Level (\d+)/);
+        names.items[id] = [en.name, (fr && fr.name) || en.name, en.quality ?? 1, sc ? +sc[1] : -1, sc ? +sc[2] : -1, il ? +il[1] : 0, req ? +req[1] : 0, en.icon || ""];
+        wh++;
+      } catch { /* retried next run */ }
+    }
+  }
+  if (miss.length) await Promise.all(Array.from({ length: 6 }, whWorker));
+  if (wh) console.log(`Item names: +${wh} from Wowhead.`);
   await writeFile("data/names.json", JSON.stringify(names));
   const v = Object.values(names.items);
-  console.log(`Item names: +${done} this run, ${v.filter(x => x && x !== -1).length} named, ${v.filter(x => x === 0).length} to retry, ${v.filter(x => x === -1).length} unknown, ${[...ids].filter(id => !(id in names.items)).length} not tried yet.`);
+  console.log(`Item names: +${done} this run, ${v.filter(x => x && x !== -1).length} named, ${v.filter(x => x === 0).length} to retry, ${v.filter(x => x === -1).length} for Wowhead, ${v.filter(x => x === -2).length} unknown, ${[...ids].filter(id => !(id in names.items)).length} not tried yet.`);
 }
 
 const tok = await token();
