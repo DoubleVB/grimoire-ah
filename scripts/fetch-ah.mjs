@@ -140,6 +140,10 @@ async function itemMeta(tok, houses) {
   const ids = new Set();
   for (const h of houses) { const l = await readJson(`data/ah/${h.key}/catalog.json`, null); if (l) Object.keys(l.items).forEach(id => ids.add(id)); }
   const todo = [...ids].filter(id => !(id in names.items)).sort((a, b) => a - b).slice(0, NAMES_PER_RUN);
+  // Icons are Blizzard image files: remember the address they live at (same folder for every icon)
+  if (!names.iconBase && names.ns) {
+    try { const m = await apiNs(tok, "/data/wow/media/item/2589", names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) { names.iconBase = String(a.value).replace(/[^/]+$/, ""); await writeFile("data/names.json", JSON.stringify(names)); } } catch {}
+  }
   if (!todo.length) { console.log(`Item names: complete (${Object.keys(names.items).length}).`); return; }
   if (!names.ns) {
     for (const ns of [NAMESPACE.replace(/^dynamic-/, "static-"), "static-classic1x-" + REGION, "static-classic-" + REGION]) {
@@ -156,7 +160,7 @@ async function itemMeta(tok, houses) {
         const it = await apiNs(tok, `/data/wow/item/${id}`, names.ns);
         if (!it) { names.items[id] = 0; continue; }
         let icon = "";
-        try { const m = await apiNs(tok, `/data/wow/media/item/${id}`, names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) icon = String(a.value).split("/").pop().replace(/\.jpg$/, ""); } catch {}
+        try { const m = await apiNs(tok, `/data/wow/media/item/${id}`, names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) { icon = String(a.value).split("/").pop().replace(/\.jpg$/, ""); names.iconBase = names.iconBase || String(a.value).replace(/[^/]+$/, ""); } } catch {}
         const c = it.item_class || {}, sc = it.item_subclass || {};
         if (c.id != null) names.classes[c.id] = [loc(c.name, "en_US"), loc(c.name, "fr_FR")];
         if (c.id != null && sc.id != null) names.classes[c.id + "-" + sc.id] = [loc(sc.name, "en_US"), loc(sc.name, "fr_FR")];
