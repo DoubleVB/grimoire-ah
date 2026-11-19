@@ -6,7 +6,7 @@
 //   GrimoireData.lua the same data, ready for the in-game Grimoire addon
 // plus data/index.json (the list of auction houses) and, for backward compatibility, data/latest.json + data/snaps.json
 // for the auction house named by the RULESET / AH_IDS variables.
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, rm } from "node:fs/promises";
 
 const env = process.env;
 const REGION = env.REGION || "eu";
@@ -55,13 +55,15 @@ async function discover(tok) {
     for (const name in byName) {
       const ids = byName[name].map(String).sort();
       const rsName = RULESET_NAMES[rs.id] || rs.name || "Ruleset " + rs.id;
-      groups.push({ key: `${rs.id}-${slug(name)}`, ruleset: rs.id, rulesetName: rsName, name, label: `${rsName} · ${name}`, ids });
+      // On Forever every server type shares the same auction houses (same ids): scan each market once
+      const same = groups.find(g => g.ids.join(",") === ids.join(","));
+      if (same) { if (!same.rulesets.includes(rsName)) same.rulesets.push(rsName); continue; }
+      groups.push({ key: slug(name), ruleset: rs.id, rulesets: [rsName], name, label: name, ids });
     }
   }
   // The owner's auction house is always scanned, even if the index above is refused
-  if (MAIN_RS && MAIN_IDS && !groups.some(g => String(g.ruleset) === MAIN_RS && g.ids.join(",") === MAIN_IDS)) {
-    const rsName = RULESET_NAMES[MAIN_RS] || "Ruleset " + MAIN_RS;
-    groups.push({ key: `${MAIN_RS}-ah-${MAIN_IDS.split(",")[0]}`, ruleset: +MAIN_RS, rulesetName: rsName, name: "AH " + MAIN_IDS, label: `${rsName} · AH ${MAIN_IDS}`, ids: MAIN_IDS.split(",") });
+  if (MAIN_RS && MAIN_IDS && !groups.some(g => g.ids.join(",") === MAIN_IDS)) {
+    groups.push({ key: "ah-" + MAIN_IDS.split(",")[0], ruleset: +MAIN_RS, rulesets: [RULESET_NAMES[MAIN_RS] || "Ruleset " + MAIN_RS], name: "AH " + MAIN_IDS, label: "AH " + MAIN_IDS, ids: MAIN_IDS.split(",") });
   }
   return groups;
 }
@@ -139,24 +141,25 @@ for (const g of groups) {
     await mkdir(dir, { recursive: true });
     let snapsFile = await readJson(`${dir}/snaps.json`, null);
     // First multi-AH run: the owner's auction house keeps the history the old single-AH scan built at the root
-    if (!snapsFile && String(g.ruleset) === MAIN_RS && g.ids.join(",") === MAIN_IDS) snapsFile = await readJson("data/snaps.json", null);
+    if (!snapsFile && g.ids.join(",") === MAIN_IDS) snapsFile = await readJson("data/snaps.json", null);
     snapsFile = snapsFile || { v: 1, snaps: [] };
     const last = snapsFile.snaps[snapsFile.snaps.length - 1];
-    if (last && Math.abs(last.t - t) < 60000) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); if (prev) index.push(prev); continue; }
+    const fresh = !(await readJson(`${dir}/latest.json`, null));
+    if (last && Math.abs(last.t - t) < 60000 && !fresh) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); if (prev) index.push(prev); continue; }
     const prices = priceTable(auctions);
     const items = {}; for (const id in prices) if (tracked.has(id)) items[id] = [prices[id][2], prices[id][0]];
-    snapsFile.snaps.push({ t, items });
+    if (!(last && Math.abs(last.t - t) < 60000)) snapsFile.snaps.push({ t, items });
     snapsFile.snaps = snapsFile.snaps.filter(s => s.t >= t - KEEP_DAYS * 86400000).sort((a, b) => a.t - b.t);
     const sold = sold24(snapsFile.snaps, t);
     const latest = { v: 1, t, key: g.key, label: g.label, count: auctions.length, ah: g.ids, prices };
     await writeFile(`${dir}/latest.json`, JSON.stringify(latest));
     await writeFile(`${dir}/snaps.json`, JSON.stringify(snapsFile));
     await writeFile(`${dir}/GrimoireData.lua`, luaFile(g, t, prices, sold));
-    if (String(g.ruleset) === MAIN_RS && g.ids.join(",") === MAIN_IDS) {
+    if (g.ids.join(",") === MAIN_IDS) {
       await writeFile("data/latest.json", JSON.stringify(latest));
       await writeFile("data/snaps.json", JSON.stringify(snapsFile));
     }
-    index.push({ key: g.key, ruleset: g.ruleset, rulesetName: g.rulesetName, name: g.name, label: g.label, ah: g.ids, t, count: auctions.length, scans: snapsFile.snaps.length });
+    index.push({ key: g.key, ruleset: g.ruleset, rulesets: g.rulesets, name: g.name, label: g.label, ah: g.ids, t, count: auctions.length, scans: snapsFile.snaps.length });
     console.log(`${g.label}: ${auctions.length} auctions, ${Object.keys(items).length} Grimoire items, data from ${new Date(t).toISOString()}, ${snapsFile.snaps.length} scans.`);
   } catch (e) {
     failures++; console.log(`${g.label}: FAILED ${e.message}`);
@@ -164,5 +167,7 @@ for (const g of groups) {
   }
 }
 if (!index.length) throw new Error("No auction house could be scanned: check the Blizzard secrets.");
+// Remove the folders of auction houses that are no longer scanned
+for (const d of await readdir("data/ah").catch(() => [])) if (!index.some(h => h.key === d)) await rm(`data/ah/${d}`, { recursive: true, force: true });
 await writeFile("data/index.json", JSON.stringify({ v: 1, t: Date.now(), houses: index }, null, 1));
 console.log(`Done: ${index.length} auction house(s) published, ${failures} failure(s).`);
