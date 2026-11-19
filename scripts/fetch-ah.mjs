@@ -1,9 +1,9 @@
-// Grimoire — hourly WoW Forever auction house scan (runs on GitHub Actions, Node 20+, no dependencies)
+// Profitmancer (ex-Grimoire) — hourly WoW Forever auction house scan (runs on GitHub Actions, Node 20+, no dependencies)
 // Scans EVERY Forever auction house (each ruleset, each faction house) so anyone can use the data without a Blizzard key.
 // Writes, per auction house, in data/ah/<key>/:
 //   latest.json      current prices for every item
 //   snaps.json       KEEP_DAYS of history for the Grimoire's items
-//   GrimoireData.lua the same data, ready for the in-game Grimoire addon
+//   ProfitmancerData.lua the same data, ready for the in-game Profitmancer addon
 // plus data/index.json (the list of auction houses) and, for backward compatibility, data/latest.json + data/snaps.json
 // for the auction house named by the RULESET / AH_IDS variables.
 import { readFile, writeFile, mkdir, readdir, rm } from "node:fs/promises";
@@ -113,12 +113,12 @@ function sold24(snaps, t) {
   return out;
 }
 
-function luaFile(g, t, prices, sold) {
+function luaFile(g, t, prices, sold, name = "ProfitmancerData") {
   const esc = s => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   const rows = Object.keys(prices).sort((a, b) => a - b).map(id => { const [mn, mk, q] = prices[id]; return `[${id}]={${mk},${mn},${q},${sold[id] ?? -1}}`; });
-  return `-- Grimoire price data · ${g.label} · generated ${new Date(t).toISOString()}\n` +
+  return `-- Profitmancer price data · ${g.label} · generated ${new Date(t).toISOString()}\n` +
     `-- {EMV, lowest buyout, quantity listed, sold in the last 24 h (-1 = not enough history)} in copper\n` +
-    `GrimoireData={v=1,t=${Math.floor(t / 1000)},key="${esc(g.key)}",ah="${esc(g.label)}",p={\n` + rows.join(",\n") + `\n}}\n`;
+    `${name}={v=1,t=${Math.floor(t / 1000)},key="${esc(g.key)}",ah="${esc(g.label)}",p={\n` + rows.join(",\n") + `\n}}\n`;
 }
 
 const tok = await token();
@@ -154,7 +154,8 @@ for (const g of groups) {
     const latest = { v: 1, t, key: g.key, label: g.label, count: auctions.length, ah: g.ids, prices };
     await writeFile(`${dir}/latest.json`, JSON.stringify(latest));
     await writeFile(`${dir}/snaps.json`, JSON.stringify(snapsFile));
-    await writeFile(`${dir}/GrimoireData.lua`, luaFile(g, t, prices, sold));
+    await writeFile(`${dir}/ProfitmancerData.lua`, luaFile(g, t, prices, sold));
+    await writeFile(`${dir}/GrimoireData.lua`, luaFile(g, t, prices, sold, "GrimoireData")); // addon's former name
     if (g.ids.join(",") === MAIN_IDS) {
       await writeFile("data/latest.json", JSON.stringify(latest));
       await writeFile("data/snaps.json", JSON.stringify(snapsFile));
