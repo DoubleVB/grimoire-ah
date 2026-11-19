@@ -121,6 +121,55 @@ function luaFile(g, t, prices, sold, name = "ProfitmancerData") {
     `${name}={v=1,t=${Math.floor(t / 1000)},key="${esc(g.key)}",ah="${esc(g.label)}",p={\n` + rows.join(",\n") + `\n}}\n`;
 }
 
+// ——— Names (EN + FR), quality, category and icon of every item seen at the AH, for the site's catalog ———
+// Fetched once per item from the static item API and kept in data/names.json; a few thousand per run until complete.
+const NAMES_PER_RUN = +(env.NAMES_PER_RUN || 2500);
+const QUALITY = { POOR: 0, COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, ARTIFACT: 6, HEIRLOOM: 7 };
+async function apiNs(tok, path, ns) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(`https://${REGION}.api.blizzard.com${path}?namespace=${encodeURIComponent(ns)}`, { headers: { Authorization: "Bearer " + tok } });
+    if (r.status === 404) return null;
+    if ((r.status === 429 || r.status >= 500) && attempt < 3) { await new Promise(res => setTimeout(res, 1500 * (attempt + 1))); continue; }
+    if (!r.ok) throw new Error(`API ${r.status} at ${path}`);
+    return r.json();
+  }
+}
+const loc = (n, l) => typeof n === "string" ? n : (n && (n[l] || n.en_US)) || "";
+async function itemMeta(tok, houses) {
+  const names = await readJson("data/names.json", { v: 1, ns: null, items: {}, classes: {} });
+  const ids = new Set();
+  for (const h of houses) { const l = await readJson(`data/ah/${h.key}/catalog.json`, null); if (l) Object.keys(l.items).forEach(id => ids.add(id)); }
+  const todo = [...ids].filter(id => !(id in names.items)).sort((a, b) => a - b).slice(0, NAMES_PER_RUN);
+  if (!todo.length) { console.log(`Item names: complete (${Object.keys(names.items).length}).`); return; }
+  if (!names.ns) {
+    for (const ns of [NAMESPACE.replace(/^dynamic-/, "static-"), "static-classic1x-" + REGION, "static-classic-" + REGION]) {
+      try { if (await apiNs(tok, "/data/wow/item/2589", ns)) { names.ns = ns; break; } } catch (e) { console.log(`Namespace ${ns}: ${e.message}`); }
+    }
+    if (!names.ns) throw new Error("no static namespace answers for item 2589");
+    console.log("Item names: static namespace " + names.ns);
+  }
+  const deadline = Date.now() + 8 * 60000; let done = 0, i = 0;
+  async function worker() {
+    while (i < todo.length && Date.now() < deadline) {
+      const id = todo[i++];
+      try {
+        const it = await apiNs(tok, `/data/wow/item/${id}`, names.ns);
+        if (!it) { names.items[id] = 0; continue; }
+        let icon = "";
+        try { const m = await apiNs(tok, `/data/wow/media/item/${id}`, names.ns); const a = m && (m.assets || []).find(x => x.key === "icon"); if (a) icon = String(a.value).split("/").pop().replace(/\.jpg$/, ""); } catch {}
+        const c = it.item_class || {}, sc = it.item_subclass || {};
+        if (c.id != null) names.classes[c.id] = [loc(c.name, "en_US"), loc(c.name, "fr_FR")];
+        if (c.id != null && sc.id != null) names.classes[c.id + "-" + sc.id] = [loc(sc.name, "en_US"), loc(sc.name, "fr_FR")];
+        names.items[id] = [loc(it.name, "en_US"), loc(it.name, "fr_FR"), QUALITY[it.quality && it.quality.type] ?? 1, c.id ?? -1, sc.id ?? -1, it.level || 0, it.required_level || 0, icon];
+        done++;
+      } catch (e) { /* retried next run */ }
+    }
+  }
+  await Promise.all(Array.from({ length: 10 }, worker));
+  await writeFile("data/names.json", JSON.stringify(names));
+  console.log(`Item names: +${done} this run, ${Object.keys(names.items).length} known, ${[...ids].filter(id => !(id in names.items)).length} left.`);
+}
+
 const tok = await token();
 const groups = await discover(tok);
 console.log(`Found ${groups.length} auction house(s): ${groups.map(g => g.label + " [" + g.ids.join(",") + "]").join(" | ")}`);
@@ -144,13 +193,20 @@ for (const g of groups) {
     if (!snapsFile && g.ids.join(",") === MAIN_IDS) snapsFile = await readJson("data/snaps.json", null);
     snapsFile = snapsFile || { v: 1, snaps: [] };
     const last = snapsFile.snaps[snapsFile.snaps.length - 1];
-    const fresh = !(await readFile(`${dir}/ProfitmancerData.lua`, "utf8").catch(() => ""));
+    const fresh = !(await readFile(`${dir}/ProfitmancerData.lua`, "utf8").catch(() => "")) || !(await readFile(`${dir}/catalog.json`, "utf8").catch(() => ""));
     if (last && Math.abs(last.t - t) < 60000 && !fresh) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); if (prev) index.push(prev); continue; }
     const prices = priceTable(auctions);
     const items = {}; for (const id in prices) if (tracked.has(id)) items[id] = [prices[id][2], prices[id][0]];
     if (!(last && Math.abs(last.t - t) < 60000)) snapsFile.snaps.push({ t, items });
     snapsFile.snaps = snapsFile.snaps.filter(s => s.t >= t - KEEP_DAYS * 86400000).sort((a, b) => a.t - b.t);
-    const sold = sold24(snapsFile.snaps, t);
+    // Quantities of EVERY item over the last 26 h, so 24 h sales exist for the whole catalog (not only the Grimoire's items)
+    const qbuf = await readJson(`${dir}/qty24.json`, { v: 1, snaps: [] });
+    if (!qbuf.snaps.some(x => Math.abs(x.t - t) < 60000)) { const q = {}; for (const id in prices) q[id] = [prices[id][2]]; qbuf.snaps.push({ t, items: q }); }
+    qbuf.snaps = qbuf.snaps.filter(x => x.t >= t - 26 * 3600000).sort((a, b) => a.t - b.t);
+    const sold = Object.assign(sold24(snapsFile.snaps, t), sold24(qbuf.snaps, t));
+    const catalog = {}; for (const id in prices) { const [mn, mk, q] = prices[id]; catalog[id] = [mk, mn, q, sold[id] ?? -1]; }
+    await writeFile(`${dir}/qty24.json`, JSON.stringify(qbuf));
+    await writeFile(`${dir}/catalog.json`, JSON.stringify({ v: 1, t, key: g.key, label: g.label, items: catalog }));
     const latest = { v: 1, t, key: g.key, label: g.label, count: auctions.length, ah: g.ids, prices };
     await writeFile(`${dir}/latest.json`, JSON.stringify(latest));
     await writeFile(`${dir}/snaps.json`, JSON.stringify(snapsFile));
@@ -168,6 +224,7 @@ for (const g of groups) {
   }
 }
 if (!index.length) throw new Error("No auction house could be scanned: check the Blizzard secrets.");
+try { await itemMeta(tok, index); } catch (e) { console.log("Item names: " + e.message); }
 // Remove the folders of auction houses that are no longer scanned
 for (const d of await readdir("data/ah").catch(() => [])) if (!index.some(h => h.key === d)) await rm(`data/ah/${d}`, { recursive: true, force: true });
 await writeFile("data/index.json", JSON.stringify({ v: 1, t: Date.now(), houses: index }, null, 1));
