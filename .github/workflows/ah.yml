@@ -9,16 +9,16 @@ concurrency: scan-ah
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Get the previous data (branch "data")
         run: |
-          git fetch origin data --depth=1 2>/dev/null && git checkout FETCH_HEAD -- latest.json snaps.json 2>/dev/null && mv latest.json snaps.json data/ || echo "First run: no data yet"
+          if git fetch origin data --depth=1 2>/dev/null; then git archive --format=tar FETCH_HEAD | tar -x -C data; else echo "First run: no data yet"; fi
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Fetch the auction house
+      - name: Scan every auction house
         env:
           BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
           BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
@@ -30,8 +30,8 @@ jobs:
         run: node scripts/fetch-ah.mjs
       - name: Publish the data (branch "data", one commit, no history so the repo stays small)
         run: |
-          [ -f data/latest.json ] || exit 0
-          mkdir -p /tmp/out && cp data/latest.json data/snaps.json /tmp/out/
+          [ -f data/index.json ] || exit 0
+          mkdir -p /tmp/out && cp -r data/. /tmp/out/ && rm -f /tmp/out/items.json
           cd /tmp/out
           git init -q -b data
           git config user.name "grimoire-bot"
