@@ -144,7 +144,7 @@ for (const g of groups) {
     if (!snapsFile && g.ids.join(",") === MAIN_IDS) snapsFile = await readJson("data/snaps.json", null);
     snapsFile = snapsFile || { v: 1, snaps: [] };
     const last = snapsFile.snaps[snapsFile.snaps.length - 1];
-    const fresh = !(await readJson(`${dir}/latest.json`, null));
+    const fresh = !(await readFile(`${dir}/ProfitmancerData.lua`, "utf8").catch(() => ""));
     if (last && Math.abs(last.t - t) < 60000 && !fresh) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); if (prev) index.push(prev); continue; }
     const prices = priceTable(auctions);
     const items = {}; for (const id in prices) if (tracked.has(id)) items[id] = [prices[id][2], prices[id][0]];
