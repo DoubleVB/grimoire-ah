@@ -1,7 +1,7 @@
 name: Scan AH
 on:
   schedule:
-    - cron: "7,27,47 * * * *"   # 3 tries an hour: GitHub often starts scheduled runs late or skips them; unchanged Blizzard data is not stored twice
+    - cron: "*/10 * * * *"   # every 10 min: GitHub skips many scheduled runs; Blizzard publishes at about :22 each hour and unchanged data is not stored twice
   workflow_dispatch:        # "Run workflow" button to test by hand
 permissions:
   contents: write
