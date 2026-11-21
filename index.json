@@ -1,0 +1,72 @@
+{
+ "v": 1,
+ "t": 1795285533912,
+ "houses": [
+  {
+   "key": "alliance-auction-house",
+   "ruleset": 1,
+   "rulesets": [
+    "PvP",
+    "RP-PvP",
+    "RP",
+    "Normal"
+   ],
+   "name": "Alliance Auction House",
+   "label": "Alliance Auction House",
+   "ah": [
+    "110",
+    "111",
+    "112",
+    "119",
+    "123"
+   ],
+   "t": 1795285399000,
+   "count": 738080,
+   "scans": 47
+  },
+  {
+   "key": "horde-auction-house",
+   "ruleset": 1,
+   "rulesets": [
+    "PvP",
+    "RP-PvP",
+    "RP",
+    "Normal"
+   ],
+   "name": "Horde Auction House",
+   "label": "Horde Auction House",
+   "ah": [
+    "113",
+    "114",
+    "115",
+    "120",
+    "124"
+   ],
+   "t": 1795285400000,
+   "count": 723317,
+   "scans": 131
+  },
+  {
+   "key": "blackwater-auction-house",
+   "ruleset": 1,
+   "rulesets": [
+    "PvP",
+    "RP-PvP",
+    "RP",
+    "Normal"
+   ],
+   "name": "Blackwater Auction House",
+   "label": "Blackwater Auction House",
+   "ah": [
+    "116",
+    "117",
+    "118",
+    "121",
+    "125"
+   ],
+   "t": 1795285372000,
+   "count": 125566,
+   "scans": 47
+  }
+ ]
+}
