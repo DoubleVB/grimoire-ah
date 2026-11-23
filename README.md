@@ -28,12 +28,13 @@ Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoir
 
 ## How the data works
 
-Every hour, a GitHub Actions workflow (`.github/workflows/ah.yml`, script `scripts/fetch-ah.mjs`) reads the Blizzard auction house API for every WoW Forever auction house (Alliance, Horde, Blackwater) and publishes to the **`data`** branch:
+Every hour, a GitHub Actions workflow (`.github/workflows/ah.yml`, script `scripts/fetch-ah.mjs`) reads the Blizzard auction house API for every WoW Forever market, one per server type (PvP, Normal, RP, RP-PvP) and faction (Alliance, Horde, Blackwater), and publishes to the **`data`** branch:
 
-- `index.json`: the list of auction houses;
-- `ah/<house>/latest.json`, `catalog.json`: current prices of every item;
-- `ah/<house>/snaps.json`: 7 days of history for the website's sales estimates;
-- `ah/<house>/ProfitmancerData.lua`: the same prices, ready for the addon;
+- `index.json`: the list of markets;
+- `ah/<server type>-<faction>/latest.json`, `catalog.json` (e.g. `pvp-horde`, `pve-alliance`): current prices of every item;
+- `ah/<server type>-<faction>/snaps.json`: 7 days of history for the website's sales estimates;
+- `ah/<server type>-<faction>/ProfitmancerData.lua`: the same prices, ready for the addon;
+- `ah/<faction>-auction-house/ProfitmancerData.lua`: every server type of a faction in one file, the one the price updater downloads (the addon uses the prices of the server type you play on);
 - `names.json`: item names (English and French), quality, category and icon.
 
 The `data` branch is rewritten on each scan, without history, so the repository stays small.
@@ -42,7 +43,7 @@ The `data` branch is rewritten on each scan, without history, so the repository 
 
 1. Fork the repository (it must be public so the addon and website can read the data).
 2. *Settings → Secrets and variables → Actions → Secrets*: add `BLIZZARD_CLIENT_ID` and `BLIZZARD_CLIENT_SECRET` (from the Blizzard developer portal).
-3. Optional variables: `REGION` (`eu`), `NAMESPACE` (`dynamic-forever-eu`), `RULESET` and `AH_IDS`.
+3. Optional variables: `REGION` (`eu`) and `NAMESPACE` (`dynamic-forever-eu`).
 4. *Actions → Scan AH → Run workflow*. A `data` branch appears after about a minute.
 
 GitHub pauses scheduled workflows after 60 days without activity: click *Enable workflow* in the Actions tab to resume.
