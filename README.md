@@ -24,7 +24,7 @@ Install the free price updater with one line in PowerShell:
 irm https://doublevb.github.io/grimoire-ah/install.ps1 | iex
 ```
 
-Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoire-ah/raw/main/Profitmancer-WoW-Forever.zip), extract it and double-click `Installer-Profitmancer.bat`. It finds your WoW Forever folder, installs the addon if needed and refreshes the prices every 15 minutes.
+Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoire-ah/raw/main/Profitmancer-WoW-Forever.zip), extract it and double-click `Installer-Profitmancer.bat`. It finds your WoW Forever folder, installs the addon if needed and keeps the prices up to date: Blizzard publishes them once an hour, and the updater checks for new ones every 15 minutes. The game loads them at login, `/reload` or a left click on the minimap button.
 
 ## How the data works
 
