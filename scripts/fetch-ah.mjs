@@ -1,20 +1,19 @@
 // Profitmancer (ex-Grimoire) — hourly WoW Forever auction house scan (runs on GitHub Actions, Node 20+, no dependencies)
-// Scans EVERY Forever auction house (each ruleset, each faction house) so anyone can use the data without a Blizzard key.
-// Writes, per auction house, in data/ah/<key>/:
-//   latest.json      current prices for every item
-//   snaps.json       KEEP_DAYS of history for the Grimoire's items
-//   ProfitmancerData.lua the same data, ready for the in-game Profitmancer addon
-// plus data/index.json (the list of auction houses) and, for backward compatibility, data/latest.json + data/snaps.json
-// for the auction house named by the RULESET / AH_IDS variables.
+// Scans EVERY Forever market (each server type × faction) so anyone can use the data without a Blizzard key.
+// Writes, per market, in data/ah/<server type>-<faction>/ (e.g. pvp-horde, pve-alliance, rppvp-blackwater):
+//   latest.json, catalog.json   current prices for every item
+//   snaps.json, qty24.json      history (sales estimates)
+//   ProfitmancerData.lua        the same prices, ready for the in-game Profitmancer addon
+// plus, per faction, data/ah/<faction>-auction-house/ProfitmancerData.lua with every server type in one file,
+// data/index.json (the list of markets) and, for very old copies of the website, data/latest.json + data/snaps.json.
 import { readFile, writeFile, mkdir, readdir, rm } from "node:fs/promises";
 
 const env = process.env;
 const REGION = env.REGION || "eu";
 const NAMESPACE = env.NAMESPACE || "dynamic-forever-eu";
 const KEEP_DAYS = +(env.KEEP_DAYS || 7);
-const MAIN_RS = String(env.RULESET || "");
-const MAIN_IDS = (env.AH_IDS || "").split(/[,\s]+/).filter(Boolean).map(String).sort().join(",");
-const RULESET_NAMES = { 1: "PvP", 2: "Normal", 3: "RP", 15: "RP-PvP" };
+// the market also published at the root (data/latest.json, data/snaps.json) for very old copies of the website
+const MAIN_KEY = env.MAIN_KEY || "pvp-horde";
 if (!env.BLIZZARD_CLIENT_ID || !env.BLIZZARD_CLIENT_SECRET) throw new Error("Missing BLIZZARD_CLIENT_ID / BLIZZARD_CLIENT_SECRET secrets.");
 
 async function token() {
@@ -41,29 +40,41 @@ const locName = n => typeof n === "string" ? n : (n && (n.en_US || n.en_GB || Ob
 const slug = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ah";
 const readJson = async (f, d) => { try { return JSON.parse(await readFile(f, "utf8")); } catch { return d; } };
 
-// ——— Discover every auction house: rulesets, then the houses of each, grouped by name (same name = one market) ———
+// ——— Which auction house is which market ———
+// On WoW Forever the ruleset number in the URL changes nothing: every ruleset lists the same 15 auction houses,
+// one per server type and faction. Checked by hand (one character per server type, Nov 2026):
+const MARKETS = [
+  { rs: "PvP", name: "PvP", fr: "JcJ", ids: { alliance: 110, horde: 113, blackwater: 116 } },
+  { rs: "PvE", name: "Normal", fr: "Normal", ids: { alliance: 111, horde: 114, blackwater: 117 } },
+  { rs: "HC", name: "Hardcore", fr: "Hardcore", ids: { alliance: 112, horde: 115, blackwater: 118 } },
+  { rs: "RP", name: "RP", fr: "RP", ids: { alliance: 119, horde: 120, blackwater: 121 } },
+  { rs: "RPPvP", name: "RP-PvP", fr: "RP-JcJ", ids: { alliance: 123, horde: 124, blackwater: 125 } },
+];
+const FACTIONS = { alliance: "Alliance", horde: "Horde", blackwater: "Blackwater" };
+const FACTION_FR = { alliance: "Alliance", horde: "Horde", blackwater: "Eaux-Noires" };
+// Before Nov 2026 the scan merged the 5 server types of a faction: those keys still get one file per faction
+// (holding every server type) so updaters installed back then keep working, and the addon picks the right type.
+const LEGACY = { alliance: "alliance-auction-house", horde: "horde-auction-house", blackwater: "blackwater-auction-house" };
+
+// ——— Discover every auction house: the list Blizzard gives, then one market per (server type, faction) ———
 async function discover(tok) {
   let rulesets = [];
-  try { const j = await api(tok, "/data/wow/ruleset/index"); rulesets = (j && (j.rulesets || Object.values(j).find(Array.isArray)) || []).map(r => ({ id: r.id, name: locName(r.name) })); } catch (e) { console.log("Ruleset index refused: " + e.message); }
-  if (!rulesets.length) rulesets = [1, 2, 3, 15].map(id => ({ id, name: "" }));
-  const groups = [];
+  try { const j = await api(tok, "/data/wow/ruleset/index"); rulesets = (j && (j.rulesets || Object.values(j).find(Array.isArray)) || []).map(r => r.id); } catch (e) { console.log("Ruleset index refused: " + e.message); }
+  if (!rulesets.length) rulesets = [1];
+  const seen = new Map();
   for (const rs of rulesets) {
-    let houses = [];
-    try { const j = await api(tok, `/data/wow/ruleset/${rs.id}/auctions/`); houses = (j && j.auctions || []).map(a => ({ id: a.id, name: locName(a.name) })); } catch (e) { console.log(`Ruleset ${rs.id}: ${e.message}`); }
-    const byName = {};
-    for (const h of houses) (byName[h.name || "AH"] = byName[h.name || "AH"] || []).push(h.id);
-    for (const name in byName) {
-      const ids = byName[name].map(String).sort();
-      const rsName = RULESET_NAMES[rs.id] || rs.name || "Ruleset " + rs.id;
-      // On Forever every server type shares the same auction houses (same ids): scan each market once
-      const same = groups.find(g => g.ids.join(",") === ids.join(","));
-      if (same) { if (!same.rulesets.includes(rsName)) same.rulesets.push(rsName); continue; }
-      groups.push({ key: slug(name), ruleset: rs.id, rulesets: [rsName], name, label: name, ids });
-    }
+    try { const j = await api(tok, `/data/wow/ruleset/${rs}/auctions/`); for (const a of (j && j.auctions) || []) if (!seen.has(a.id)) seen.set(a.id, { rs, name: locName(a.name) }); }
+    catch (e) { console.log(`Ruleset ${rs}: ${e.message}`); }
   }
-  // The owner's auction house is always scanned, even if the index above is refused
-  if (MAIN_RS && MAIN_IDS && !groups.some(g => g.ids.join(",") === MAIN_IDS)) {
-    groups.push({ key: "ah-" + MAIN_IDS.split(",")[0], ruleset: +MAIN_RS, rulesets: [RULESET_NAMES[MAIN_RS] || "Ruleset " + MAIN_RS], name: "AH " + MAIN_IDS, label: "AH " + MAIN_IDS, ids: MAIN_IDS.split(",") });
+  const groups = [];
+  for (const m of MARKETS) for (const f in m.ids) {
+    const id = m.ids[f], s = seen.get(id);
+    if (seen.size && !s) continue; // gone from Blizzard's list
+    groups.push({ key: slug(m.rs + "-" + f), rs: m.rs, faction: f, ruleset: (s && s.rs) || rulesets[0], rulesets: [m.name], name: `${FACTIONS[f]} · ${m.name}`, label: `${FACTIONS[f]} · ${m.name}`, labelFr: `${FACTION_FR[f]} · ${m.fr}`, ids: [String(id)] });
+  }
+  // an auction house Blizzard adds later: scanned on its own until it is named above
+  for (const [id, s] of seen) if (!MARKETS.some(m => Object.values(m.ids).includes(id))) {
+    groups.push({ key: "ah-" + id, rs: "", faction: "", ruleset: s.rs, rulesets: [], name: `${s.name} #${id}`, label: `${s.name} #${id}`, labelFr: `${s.name} n°${id}`, ids: [String(id)] });
   }
   return groups;
 }
@@ -113,12 +124,21 @@ function sold24(snaps, t) {
   return out;
 }
 
-function luaFile(g, t, prices, sold, name = "ProfitmancerData") {
-  const esc = s => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const rows = Object.keys(prices).sort((a, b) => a - b).map(id => { const [mn, mk, q] = prices[id]; return `[${id}]={${mk},${mn},${q},${sold[id] ?? -1}}`; });
-  return `-- Profitmancer price data · ${g.label} · generated ${new Date(t).toISOString()}\n` +
-    `-- {EMV, lowest buyout, quantity listed, sold in the last 24 h (-1 = not enough history)} in copper\n` +
-    `${name}={v=1,t=${Math.floor(t / 1000)},key="${esc(g.key)}",ah="${esc(g.label)}",p={\n` + rows.join(",\n") + `\n}}\n`;
+const esc = s => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+// rows from a catalog ({id: [EMV, lowest, quantity, sold 24 h]})
+const luaRows = cat => Object.keys(cat).sort((a, b) => a - b).map(id => { const [mk, mn, q, sd] = cat[id]; return `[${id}]={${mk},${mn},${q},${sd ?? -1}}`; }).join(",\n");
+const HEAD = "-- {EMV, lowest buyout, quantity listed, sold in the last 24 h (-1 = not enough history)} in copper\n";
+function luaFile(g, t, cat, name = "ProfitmancerData") {
+  return `-- Profitmancer price data · ${g.label} · generated ${new Date(t).toISOString()}\n` + HEAD +
+    `${name}={v=1,t=${Math.floor(t / 1000)},key="${esc(g.key)}",ah="${esc(g.label)}",rs="${esc(g.rs)}",p={\n` + luaRows(cat) + `\n}}\n`;
+}
+// One file per faction holding every server type: "p" is the PvP market (what addons older than 1.3.7 read),
+// "alt" the other server types; the addon switches to the one of the character's server type.
+function luaFaction(key, list, name = "ProfitmancerData") {
+  const [main, ...rest] = list;
+  const alt = rest.map(m => `${m.rs}={t=${Math.floor(m.t / 1000)},ah="${esc(m.label)}",p={\n${luaRows(m.items)}\n}}`).join(",\n");
+  return `-- Profitmancer price data · ${FACTIONS[main.faction]}, every server type · generated ${new Date(main.t).toISOString()}\n` + HEAD +
+    `${name}={v=2,t=${Math.floor(main.t / 1000)},key="${esc(key)}",ah="${esc(main.label)}",rs="${esc(main.rs)}",p={\n${luaRows(main.items)}\n},alt={\n${alt}\n}}\n`;
 }
 
 // ——— Names (EN + FR), quality, category and icon of every item seen at the AH, for the site's catalog ———
@@ -213,10 +233,7 @@ for (const g of groups) {
     if (!auctions.length) { console.log(`${g.label}: no auctions`); if (prev) index.push(prev); continue; }
     const t = state.lastMod || Date.now();
     await mkdir(dir, { recursive: true });
-    let snapsFile = await readJson(`${dir}/snaps.json`, null);
-    // First multi-AH run: the owner's auction house keeps the history the old single-AH scan built at the root
-    if (!snapsFile && g.ids.join(",") === MAIN_IDS) snapsFile = await readJson("data/snaps.json", null);
-    snapsFile = snapsFile || { v: 1, snaps: [] };
+    const snapsFile = await readJson(`${dir}/snaps.json`, null) || { v: 1, snaps: [] };
     const last = snapsFile.snaps[snapsFile.snaps.length - 1];
     const fresh = !(await readFile(`${dir}/ProfitmancerData.lua`, "utf8").catch(() => "")) || !(await readFile(`${dir}/catalog.json`, "utf8").catch(() => ""));
     if (last && Math.abs(last.t - t) < 60000 && !fresh) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); if (prev) index.push(prev); continue; }
@@ -235,13 +252,12 @@ for (const g of groups) {
     const latest = { v: 1, t, key: g.key, label: g.label, count: auctions.length, ah: g.ids, prices };
     await writeFile(`${dir}/latest.json`, JSON.stringify(latest));
     await writeFile(`${dir}/snaps.json`, JSON.stringify(snapsFile));
-    await writeFile(`${dir}/ProfitmancerData.lua`, luaFile(g, t, prices, sold));
-    await writeFile(`${dir}/GrimoireData.lua`, luaFile(g, t, prices, sold, "GrimoireData")); // addon's former name
-    if (g.ids.join(",") === MAIN_IDS) {
+    await writeFile(`${dir}/ProfitmancerData.lua`, luaFile(g, t, catalog));
+    if (g.key === MAIN_KEY) {
       await writeFile("data/latest.json", JSON.stringify(latest));
       await writeFile("data/snaps.json", JSON.stringify(snapsFile));
     }
-    index.push({ key: g.key, ruleset: g.ruleset, rulesets: g.rulesets, name: g.name, label: g.label, ah: g.ids, t, count: auctions.length, scans: snapsFile.snaps.length });
+    index.push({ key: g.key, rs: g.rs, faction: g.faction, ruleset: g.ruleset, rulesets: g.rulesets, name: g.name, label: g.label, labelFr: g.labelFr, ah: g.ids, t, count: auctions.length, scans: snapsFile.snaps.length });
     console.log(`${g.label}: ${auctions.length} auctions, ${Object.keys(items).length} Grimoire items, data from ${new Date(t).toISOString()}, ${snapsFile.snaps.length} scans.`);
   } catch (e) {
     failures++; console.log(`${g.label}: FAILED ${e.message}`);
@@ -250,7 +266,24 @@ for (const g of groups) {
 }
 if (!index.length) throw new Error("No auction house could be scanned: check the Blizzard secrets.");
 try { await itemMeta(tok, index); } catch (e) { console.log("Item names: " + e.message); }
+// One file per faction with every server type (see luaFaction), at the keys updaters installed before Nov 2026 use
+const factions = [];
+for (const f in LEGACY) {
+  const list = [];
+  for (const m of MARKETS) {
+    const h = index.find(x => x.rs === m.rs && x.faction === f); if (!h) continue;
+    const c = await readJson(`data/ah/${h.key}/catalog.json`, null); if (!c) continue;
+    list.push({ rs: m.rs, faction: f, label: h.label, t: c.t, items: c.items });
+  }
+  if (!list.length) continue;
+  const dir = `data/ah/${LEGACY[f]}`;
+  // keep only the two price files there (the old merged history is meaningless now)
+  await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
+  await writeFile(`${dir}/ProfitmancerData.lua`, luaFaction(LEGACY[f], list));
+  await writeFile(`${dir}/GrimoireData.lua`, luaFaction(LEGACY[f], list, "GrimoireData")); // addon's former name
+  factions.push({ key: LEGACY[f], faction: f, label: FACTIONS[f], labelFr: FACTION_FR[f], rs: list.map(m => m.rs) });
+}
 // Remove the folders of auction houses that are no longer scanned
-for (const d of await readdir("data/ah").catch(() => [])) if (!index.some(h => h.key === d)) await rm(`data/ah/${d}`, { recursive: true, force: true });
-await writeFile("data/index.json", JSON.stringify({ v: 1, t: Date.now(), houses: index }, null, 1));
+for (const d of await readdir("data/ah").catch(() => [])) if (!index.some(h => h.key === d) && !factions.some(h => h.key === d)) await rm(`data/ah/${d}`, { recursive: true, force: true });
+await writeFile("data/index.json", JSON.stringify({ v: 2, t: Date.now(), houses: index, factions }, null, 1));
 console.log(`Done: ${index.length} auction house(s) published, ${failures} failure(s).`);
