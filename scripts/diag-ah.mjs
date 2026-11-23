@@ -8,11 +8,13 @@ const ITEMS = new Set("2515,8069,10513,8067,3033,2516,8068,2512,2519,11285,10512
 for (const id of [110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 123, 124, 125]) {
   const r = await fetch(`https://${REGION}.api.blizzard.com/data/wow/ruleset/1/auctions/${id}?namespace=${NAMESPACE}&locale=en_US`, { headers: { Authorization: "Bearer " + tok } });
   const j = r.ok ? await r.json() : {};
+  let list = [...(j.auctions || []), ...(j.commodities || [])];
+  if (!j.commodities) { const c = await fetch(`https://${REGION}.api.blizzard.com/data/wow/ruleset/1/auctions/${id}/commodities?namespace=${NAMESPACE}&locale=en_US`, { headers: { Authorization: "Bearer " + tok } }); if (c.ok) list = list.concat((await c.json()).auctions || []); }
   const out = {};
-  for (const a of j.auctions || []) {
+  for (const a of list) {
     const it = a.item && a.item.id; if (!ITEMS.has(it)) continue;
     const q = a.quantity || 1, u = a.unit_price ?? (a.buyout != null ? a.buyout / q : null); if (u == null) continue;
     const o = out[it] = out[it] || [Infinity, 0]; o[0] = Math.min(o[0], Math.round(u)); o[1] += q;
   }
-  console.log("DIAG2 " + id + " " + r.headers.get("last-modified") + " " + JSON.stringify(out));
+  console.log("DIAG2 " + id + " " + r.headers.get("last-modified") + " " + list.length + " " + JSON.stringify(out));
 }
