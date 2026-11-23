@@ -1,31 +1,52 @@
-# Grimoire — scan de l'HV dans le cloud
+# Profitmancer — WoW Forever crafting & auction house
 
-Toutes les heures, GitHub Actions interroge l'API Blizzard (WoW Forever) et publie :
+Profitmancer helps you make gold with your professions and the auction house on **WoW Forever**. It is an in-game addon, a companion website and an hourly cloud scan of every Forever auction house.
 
-- `latest.json` : les derniers prix de tous les objets ;
-- `snaps.json` : 7 jours d'historique des objets du Grimoire.
+- **Addon:** [CurseForge](https://www.curseforge.com/wow/addons/profitmancer)
+- **Website:** [doublevb.github.io/grimoire-ah](https://doublevb.github.io/grimoire-ah/)
 
-Les deux fichiers sont publiés sur la branche **`data`**. Le Grimoire les fusionne à chaque ouverture.
+## The addon
 
-## Mise en place (une fois)
+- **Tooltips:** vendor price, AH market price with sales per day, crafting cost and profit. Hold Shift for the details.
+- **Profession windows:** profit or loss next to every recipe, % chance of a skill point, cooldown status, and an Export button that turns a recipe's reagents into a shopping list.
+- **Craft cooldowns:** transmutes, Mooncloth, Salt Shaker... for every profession and every character, with a notification when one is ready and a counter on the minimap button.
+- **Auction house tabs:** *Sales* (history, totals by item, sales awaiting mail, current listings vs market price) and *Shop lists* (Auctionator-compatible lists with an adjustable number of crafts and prefilled purchases).
+- **Options window:** right-click the minimap button or `/pfm options`.
+- **Earnings per session:** `/pfm gains`.
 
-1. **Créer le dépôt** : sur GitHub, *New repository*, nom `grimoire-ah`, **Public**. Le dépôt doit être public pour que le Grimoire puisse lire les données. Il ne contient que des prix d'HV : tes identifiants restent dans les *Secrets*, qui ne sont jamais visibles.
-2. **Envoyer les fichiers** : *Add file → Upload files*. Glisse le **contenu** du dossier `grimoire-cloud` (les dossiers `.github`, `scripts`, `data`, et ce fichier), puis clique sur *Commit changes*.
-   - Le dossier `.github` commence par un point. S'il n'apparaît pas dans l'explorateur Windows, active *Affichage → Éléments masqués*.
-3. **Ajouter les secrets** : *Settings → Secrets and variables → Actions → onglet Secrets → New repository secret*.
-   - `BLIZZARD_CLIENT_ID` : ton Client ID Blizzard.
-   - `BLIZZARD_CLIENT_SECRET` : ton Client secret Blizzard.
-4. **Ajouter les variables** : même page, onglet **Variables**, *New repository variable*.
-   - `RULESET` et `AH_IDS` : recopie les valeurs affichées dans le Grimoire, onglet *Price source → API Blizzard → « For GitHub (Variables) »*.
-   - Facultatif : `REGION` (`eu` par défaut) et `NAMESPACE` (`dynamic-forever-eu` par défaut).
-5. **Premier lancement** : onglet *Actions*, accepte l'activation des workflows si GitHub la demande, puis *Scan AH → Run workflow*. Après environ 1 minute, le point doit être vert et une branche `data` doit apparaître.
-6. **Brancher le Grimoire** : onglet *Price source → API Blizzard → Data address*, colle :
-   `https://raw.githubusercontent.com/DoubleVB/grimoire-ah/data/`
+English and French.
 
-Le scan tourne ensuite automatiquement toutes les heures (à hh:17), PC éteint compris.
+## Automatic prices (optional, Windows)
 
-## Bon à savoir
+Install the free price updater with one line in PowerShell:
 
-- **Délais :** GitHub peut décaler les tâches planifiées de quelques minutes. Les données brutes mettent jusqu'à environ 5 minutes à se mettre à jour.
-- **Taille du dépôt :** la branche `data` est réécrite à chaque scan, sans historique, pour que le dépôt reste léger.
-- **Mise en pause :** si le dépôt n'a aucune activité pendant 60 jours, GitHub met les tâches planifiées en pause. Il suffit de cliquer sur *Enable workflow* dans l'onglet Actions.
+```
+irm https://doublevb.github.io/grimoire-ah/install.ps1 | iex
+```
+
+Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoire-ah/raw/main/Profitmancer-WoW-Forever.zip), extract it and double-click `Installer-Profitmancer.bat`. It finds your WoW Forever folder, installs the addon if needed and refreshes the prices every 15 minutes.
+
+## How the data works
+
+Every hour, a GitHub Actions workflow (`.github/workflows/ah.yml`, script `scripts/fetch-ah.mjs`) reads the Blizzard auction house API for every WoW Forever auction house (Alliance, Horde, Blackwater) and publishes to the **`data`** branch:
+
+- `index.json`: the list of auction houses;
+- `ah/<house>/latest.json`, `catalog.json`: current prices of every item;
+- `ah/<house>/snaps.json`: 7 days of history for the website's sales estimates;
+- `ah/<house>/ProfitmancerData.lua`: the same prices, ready for the addon;
+- `names.json`: item names (English and French), quality, category and icon.
+
+The `data` branch is rewritten on each scan, without history, so the repository stays small.
+
+### Running your own scan
+
+1. Fork the repository (it must be public so the addon and website can read the data).
+2. *Settings → Secrets and variables → Actions → Secrets*: add `BLIZZARD_CLIENT_ID` and `BLIZZARD_CLIENT_SECRET` (from the Blizzard developer portal).
+3. Optional variables: `REGION` (`eu`), `NAMESPACE` (`dynamic-forever-eu`), `RULESET` and `AH_IDS`.
+4. *Actions → Scan AH → Run workflow*. A `data` branch appears after about a minute.
+
+GitHub pauses scheduled workflows after 60 days without activity: click *Enable workflow* in the Actions tab to resume.
+
+---
+
+**FR** — Profitmancer t'aide à gagner de l'or avec tes métiers et l'hôtel des ventes de WoW Forever : un addon (prix, profit des crafts, % de chance de monter, cooldowns de tous tes personnages, historique des ventes, listes de courses, options), un site compagnon et un scan horaire de tous les hôtels des ventes de Forever.
