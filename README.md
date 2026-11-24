@@ -1,6 +1,6 @@
 # Profitmancer — WoW Forever crafting & auction house
 
-Profitmancer helps you make gold with your professions and the auction house on **WoW Forever**. It is an in-game addon, a companion website and an hourly cloud scan of every Forever auction house.
+Profitmancer helps you make gold with your professions and the auction house on **WoW Forever**. It is an in-game addon, a companion website and a cloud scan (every 10 minutes) of every Forever auction house.
 
 - **Addon:** [CurseForge](https://www.curseforge.com/wow/addons/profitmancer)
 - **Website:** [doublevb.github.io/grimoire-ah](https://doublevb.github.io/grimoire-ah/)
@@ -28,7 +28,7 @@ Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoir
 
 ## How the data works
 
-Every hour, a GitHub Actions workflow (`.github/workflows/ah.yml`, script `scripts/fetch-ah.mjs`) reads the Blizzard auction house API for every WoW Forever market, one per server type (PvP, Normal, RP, RP-PvP) and faction (Alliance, Horde, Blackwater), and publishes to the **`data`** branch:
+A GitHub Actions workflow (`.github/workflows/ah.yml`, script `scripts/fetch-ah.mjs`) runs every 10 minutes by cron (GitHub sometimes skips scheduled runs; Blizzard publishes new data about once an hour and unchanged data is not stored twice). It reads the Blizzard auction house API for every WoW Forever market, one per server type (PvP, Normal, RP, RP-PvP) and faction (Alliance, Horde, Blackwater), and publishes to the **`data`** branch:
 
 - `index.json`: the list of markets;
 - `ah/<server type>-<faction>/latest.json`, `catalog.json` (e.g. `pvp-horde`, `pve-alliance`): current prices of every item;
@@ -38,6 +38,10 @@ Every hour, a GitHub Actions workflow (`.github/workflows/ah.yml`, script `scrip
 - `names.json`: item names (English and French), quality, category and icon.
 
 The `data` branch is rewritten on each scan, without history, so the repository stays small.
+
+## Local development
+
+No `npm install` needed: there are no dependencies. Run `npm run dev`, then open http://localhost:5173.
 
 ### Running your own scan
 
@@ -50,4 +54,4 @@ GitHub pauses scheduled workflows after 60 days without activity: click *Enable 
 
 ---
 
-**FR** — Profitmancer t'aide à gagner de l'or avec tes métiers et l'hôtel des ventes de WoW Forever : un addon (prix, profit des crafts, % de chance de monter, cooldowns de tous tes personnages, historique des ventes, listes de courses, options), un site compagnon et un scan horaire de tous les hôtels des ventes de Forever.
+**FR** — Profitmancer t'aide à gagner de l'or avec tes métiers et l'hôtel des ventes de WoW Forever : un addon (prix, profit des crafts, % de chance de monter, cooldowns de tous tes personnages, historique des ventes, listes de courses, options), un site compagnon et un scan cloud (toutes les 10 minutes) de tous les hôtels des ventes de Forever.

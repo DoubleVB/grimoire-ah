@@ -13,8 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Get the previous data (branch "data")
+        shell: bash
         run: |
-          if git fetch origin data --depth=1 2>/dev/null; then git archive --format=tar FETCH_HEAD | tar -x -C data; else echo "First run: no data yet"; fi
+          set -euo pipefail
+          # exit code 2 = the branch does not exist (first run). Any other failure stops the run: starting from
+          # empty data would publish (force-push) a branch with the whole history erased.
+          rc=0; git ls-remote --exit-code --heads origin data >/dev/null || rc=$?
+          if [ "$rc" -eq 2 ]; then echo "First run: no data yet"; exit 0; fi
+          if [ "$rc" -ne 0 ]; then echo "::error::Cannot reach branch data (git ls-remote exit $rc)"; exit 1; fi
+          git fetch origin data --depth=1
+          git archive --format=tar FETCH_HEAD | tar -x -C data
+          [ -f data/index.json ] || { echo "::error::Branch data exists but has no index.json: not overwriting it"; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -24,8 +33,6 @@ jobs:
           BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
           REGION: ${{ vars.REGION || 'eu' }}
           NAMESPACE: ${{ vars.NAMESPACE || 'dynamic-forever-eu' }}
-          RULESET: ${{ vars.RULESET }}
-          AH_IDS: ${{ vars.AH_IDS }}
           KEEP_DAYS: "7"
         run: node scripts/fetch-ah.mjs
       - name: Publish the data (branch "data", one commit, no history so the repo stays small)
@@ -34,7 +41,7 @@ jobs:
           mkdir -p /tmp/out && cp -r data/. /tmp/out/ && rm -f /tmp/out/items.json
           cd /tmp/out
           git init -q -b data
-          git config user.name "grimoire-bot"
-          git config user.email "grimoire-bot@users.noreply.github.com"
+          git config user.name "profitmancer-bot"
+          git config user.email "profitmancer-bot@users.noreply.github.com"
           git add . && git commit -qm "AH scan $(date -u +%FT%TZ)"
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data

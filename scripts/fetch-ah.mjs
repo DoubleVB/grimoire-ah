@@ -1,4 +1,4 @@
-// Profitmancer (ex-Grimoire) — hourly WoW Forever auction house scan (runs on GitHub Actions, Node 20+, no dependencies)
+// Profitmancer — hourly WoW Forever auction house scan (runs on GitHub Actions, Node 20+, no dependencies)
 // Scans EVERY Forever market (each server type × faction) so anyone can use the data without a Blizzard key.
 // Writes, per market, in data/ah/<server type>-<faction>/ (e.g. pvp-horde, pve-alliance, rppvp-blackwater):
 //   latest.json, catalog.json   current prices for every item
@@ -16,29 +16,49 @@ const KEEP_DAYS = +(env.KEEP_DAYS || 7);
 const MAIN_KEY = env.MAIN_KEY || "pvp-horde";
 if (!env.BLIZZARD_CLIENT_ID || !env.BLIZZARD_CLIENT_SECRET) throw new Error("Missing BLIZZARD_CLIENT_ID / BLIZZARD_CLIENT_SECRET secrets.");
 
+// Every request has a deadline (the whole body included: the auction lists weigh tens of MB)
+const API_TIMEOUT = +(env.API_TIMEOUT_MS || 150000), ITEM_TIMEOUT = 30000;
 async function token() {
   const r = await fetch("https://oauth.battle.net/token", {
     method: "POST",
     headers: { Authorization: "Basic " + Buffer.from(env.BLIZZARD_CLIENT_ID + ":" + env.BLIZZARD_CLIENT_SECRET).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
     body: "grant_type=client_credentials",
+    signal: AbortSignal.timeout(30000),
   });
   if (!r.ok) throw new Error("Blizzard authentication refused: " + r.status);
   return (await r.json()).access_token;
 }
 
-async function api(tok, path, state) {
+// Blizzard API. Dynamic namespace (auction houses) in en_US, with the Last-Modified date kept in `state`;
+// static namespaces (items) with no locale, so names come with every language (EN + FR).
+async function api(tok, path, { ns = NAMESPACE, locale = "en_US", state = null, timeout = API_TIMEOUT } = {}) {
+  const url = `https://${REGION}.api.blizzard.com${path}?namespace=${encodeURIComponent(ns)}` + (locale ? "&locale=" + locale : "");
   for (let attempt = 0; ; attempt++) {
-    const r = await fetch(`https://${REGION}.api.blizzard.com${path}?namespace=${encodeURIComponent(NAMESPACE)}&locale=en_US`, { headers: { Authorization: "Bearer " + tok } });
-    if (r.status === 404) return null;
-    if ((r.status === 429 || r.status >= 500) && attempt < 3) { await new Promise(res => setTimeout(res, 2000 * (attempt + 1))); continue; }
-    if (!r.ok) throw new Error(`API ${r.status} at ${path}`);
-    const lm = Date.parse(r.headers.get("last-modified") || ""); if (lm && state) state.lastMod = Math.max(state.lastMod || 0, lm);
-    return r.json();
+    const wait = () => new Promise(res => setTimeout(res, 2000 * (attempt + 1)));
+    let r;
+    try {
+      r = await fetch(url, { headers: { Authorization: "Bearer " + tok }, signal: AbortSignal.timeout(timeout) });
+      if (r.status === 404) return null;
+      if ((r.status === 429 || r.status >= 500) && attempt < 3) { await wait(); continue; }
+      if (!r.ok) throw new Error(`API ${r.status} at ${path}`);
+      const body = await r.json();
+      const lm = Date.parse(r.headers.get("last-modified") || ""); if (lm && state) state.lastMod = Math.max(state.lastMod || 0, lm);
+      return body;
+    } catch (e) {
+      // time out or network error ("fetch failed"): retried like a 5xx
+      if ((e.name === "TimeoutError" || e.name === "AbortError" || e instanceof TypeError) && attempt < 2) { await wait(); continue; }
+      throw e.name === "TimeoutError" ? new Error(`API timeout at ${path}`) : e;
+    }
   }
 }
 const locName = n => typeof n === "string" ? n : (n && (n.en_US || n.en_GB || Object.values(n)[0])) || "";
 const slug = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ah";
-const readJson = async (f, d) => { try { return JSON.parse(await readFile(f, "utf8")); } catch { return d; } };
+// Missing file -> default value. Unreadable / corrupt file -> error: never restart a history from zero in silence.
+const readJson = async (f, d) => {
+  let txt;
+  try { txt = await readFile(f, "utf8"); } catch (e) { if (e.code === "ENOENT") return d; throw e; }
+  try { return JSON.parse(txt); } catch (e) { throw new Error(`${f} is corrupt (${e.message})`); }
+};
 
 // ——— Which auction house is which market ———
 // On WoW Forever the ruleset number in the URL changes nothing: every ruleset lists the same 15 auction houses,
@@ -81,17 +101,17 @@ async function discover(tok) {
 
 async function auctionsOf(tok, rs, id, state) {
   for (const base of [`/data/wow/ruleset/${rs}/auctions/${id}`, `/data/wow/connected-realm/${rs}/auctions/${id}`]) {
-    const h = await api(tok, base, state);
+    const h = await api(tok, base, { state });
     if (!h) continue;
     let all = Array.isArray(h.auctions) ? [...h.auctions] : [];
     if (Array.isArray(h.commodities)) all = all.concat(h.commodities);
-    else { const c = await api(tok, base + "/commodities", state); if (c && Array.isArray(c.auctions)) all = all.concat(c.auctions); }
+    else { const c = await api(tok, base + "/commodities", { state }); if (c && Array.isArray(c.auctions)) all = all.concat(c.auctions); }
     if (all.length) return all;
   }
   return [];
 }
 
-// Same maths as the Grimoire: lowest price, "market" (EMV) = average of the cheapest 15%, quantity listed
+// Same maths as Profitmancer: lowest price, "market" (EMV) = average of the cheapest 15%, quantity listed
 function priceTable(auctions) {
   const by = {};
   for (const a of auctions) {
@@ -110,8 +130,13 @@ function priceTable(auctions) {
 }
 
 // Units sold over the last 24 h: drops in the listed quantity between scans (extrapolated to 24 h; needs 6 h of scans)
+// A scan listing far fewer items than usual (partial answer from Blizzard) is left out: otherwise every item it misses
+// would count its whole stock as sold. The threshold is half the median item count of the window (per buffer).
 function sold24(snaps, t) {
-  const pts = snaps.filter(s => s.t >= t - 86400000);
+  const win = snaps.filter(s => s.t >= t - 86400000);
+  const sizes = win.map(s => Object.keys(s.items).length).sort((a, b) => a - b);
+  const med = sizes.length ? sizes[sizes.length >> 1] : 0;
+  const pts = win.filter(s => Object.keys(s.items).length >= med / 2);
   const out = {}; if (pts.length < 2) return out;
   const span = (pts[pts.length - 1].t - pts[0].t) / 86400000; if (span < 0.25) return out;
   const k = span < 1 ? 1 / span : 1;
@@ -124,12 +149,12 @@ function sold24(snaps, t) {
   return out;
 }
 
-const esc = s => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+const esc = s => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n");
 // rows from a catalog ({id: [EMV, lowest, quantity, sold 24 h]})
 const luaRows = cat => Object.keys(cat).sort((a, b) => a - b).map(id => { const [mk, mn, q, sd] = cat[id]; return `[${id}]={${mk},${mn},${q},${sd ?? -1}}`; }).join(",\n");
 const HEAD = "-- {EMV, lowest buyout, quantity listed, sold in the last 24 h (-1 = not enough history)} in copper\n";
 function luaFile(g, t, cat, name = "ProfitmancerData") {
-  return `-- Profitmancer price data · ${g.label} · generated ${new Date(t).toISOString()}\n` + HEAD +
+  return `-- Profitmancer price data · ${String(g.label).replace(/[\r\n]+/g, " ")} · generated ${new Date(t).toISOString()}\n` + HEAD +
     `${name}={v=1,t=${Math.floor(t / 1000)},key="${esc(g.key)}",ah="${esc(g.label)}",rs="${esc(g.rs)}",p={\n` + luaRows(cat) + `\n}}\n`;
 }
 // One file per faction holding every server type: "p" is the PvP market (what addons older than 1.3.7 read),
@@ -145,15 +170,8 @@ function luaFaction(key, list, name = "ProfitmancerData") {
 // Fetched once per item from the static item API and kept in data/names.json; a few thousand per run until complete.
 const NAMES_PER_RUN = +(env.NAMES_PER_RUN || 2500);
 const QUALITY = { POOR: 0, COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, ARTIFACT: 6, HEIRLOOM: 7 };
-async function apiNs(tok, path, ns) {
-  for (let attempt = 0; ; attempt++) {
-    const r = await fetch(`https://${REGION}.api.blizzard.com${path}?namespace=${encodeURIComponent(ns)}`, { headers: { Authorization: "Bearer " + tok } });
-    if (r.status === 404) return null;
-    if ((r.status === 429 || r.status >= 500) && attempt < 3) { await new Promise(res => setTimeout(res, 1500 * (attempt + 1))); continue; }
-    if (!r.ok) throw new Error(`API ${r.status} at ${path}`);
-    return r.json();
-  }
-}
+// static namespace, every language (no locale)
+const apiNs = (tok, path, ns) => api(tok, path, { ns, locale: null, timeout: ITEM_TIMEOUT });
 const loc = (n, l) => typeof n === "string" ? n : (n && (n[l] || n.en_US)) || "";
 async function itemMeta(tok, houses) {
   const names = await readJson("data/names.json", { v: 1, ns: null, items: {}, classes: {} });
@@ -199,7 +217,7 @@ async function itemMeta(tok, houses) {
     while (j < miss.length && Date.now() < deadline + 4 * 60000) {
       const id = miss[j++];
       try {
-        const [en, fr] = await Promise.all(["", "?locale=2"].map(q => fetch(`https://nether.wowhead.com/forever/tooltip/item/${id}${q}`).then(r => r.ok ? r.json() : null)));
+        const [en, fr] = await Promise.all(["", "?locale=2"].map(q => fetch(`https://nether.wowhead.com/forever/tooltip/item/${id}${q}`, { signal: AbortSignal.timeout(20000) }).then(r => r.ok ? r.json() : null)));
         if (!en || !en.name) { names.items[id] = -2; continue; }
         const tip = String(en.tooltip || ""), sc = tip.match(/scstart(\d+):(\d+)/);
         const req = tip.match(/Requires Level (\d+)/), il = tip.match(/Item Level (\d+)/);
@@ -212,7 +230,7 @@ async function itemMeta(tok, houses) {
   if (wh) console.log(`Item names: +${wh} from Wowhead.`);
   await writeFile("data/names.json", JSON.stringify(names));
   const v = Object.values(names.items);
-  console.log(`Item names: +${done} this run, ${v.filter(x => x && x !== -1).length} named, ${v.filter(x => x === 0).length} to retry, ${v.filter(x => x === -1).length} for Wowhead, ${v.filter(x => x === -2).length} unknown, ${[...ids].filter(id => !(id in names.items)).length} not tried yet.`);
+  console.log(`Item names: +${done} this run, ${v.filter(Array.isArray).length} named, ${v.filter(x => x === 0).length} to retry, ${v.filter(x => x === -1).length} for Wowhead, ${v.filter(x => x === -2).length} unknown, ${[...ids].filter(id => !(id in names.items)).length} not tried yet.`);
 }
 
 const tok = await token();
@@ -222,6 +240,18 @@ const tracked = new Set((await readJson("data/items.json", [])).map(String));
 const oldIndex = await readJson("data/index.json", { houses: [] });
 const index = [];
 let failures = 0;
+const entry = (g, t, count, scans) => ({ key: g.key, rs: g.rs, faction: g.faction, ruleset: g.ruleset, rulesets: g.rulesets, name: g.name, label: g.label, labelFr: g.labelFr, ah: g.ids, t, count, scans });
+// Market not scanned this run: keep its previous index entry (or rebuild one from its files), so its folder and
+// the files the updaters download are kept instead of being deleted at the end of the run.
+async function keepPrevious(g) {
+  const prev = oldIndex.houses.find(h => h.key === g.key);
+  if (prev) { const { missingSince, ...p } = prev; index.push(p); return; }
+  try {
+    const c = await readJson(`data/ah/${g.key}/catalog.json`, null), s = await readJson(`data/ah/${g.key}/snaps.json`, null);
+    if (c && c.t) index.push(entry(g, c.t, 0, s && Array.isArray(s.snaps) ? s.snaps.length : 0));
+  } catch (e) { console.log(`::warning::${g.label}: previous files unreadable (${e.message})`); }
+}
+const readable = f => readFile(f, "utf8").then(x => { if (!x) return false; JSON.parse(x); return true; }, () => false).catch(() => false);
 
 for (const g of groups) {
   const dir = `data/ah/${g.key}`;
@@ -229,19 +259,20 @@ for (const g of groups) {
     const state = { lastMod: 0 };
     let auctions = [];
     for (const id of g.ids) auctions = auctions.concat(await auctionsOf(tok, g.ruleset, id, state));
-    const prev = oldIndex.houses.find(h => h.key === g.key);
-    if (!auctions.length) { console.log(`${g.label}: no auctions`); if (prev) index.push(prev); continue; }
+    if (!auctions.length) { console.log(`${g.label}: no auctions`); await keepPrevious(g); continue; }
     const t = state.lastMod || Date.now();
     await mkdir(dir, { recursive: true });
     const snapsFile = await readJson(`${dir}/snaps.json`, null) || { v: 1, snaps: [] };
     const last = snapsFile.snaps[snapsFile.snaps.length - 1];
-    const fresh = !(await readFile(`${dir}/ProfitmancerData.lua`, "utf8").catch(() => "")) || !(await readFile(`${dir}/catalog.json`, "utf8").catch(() => ""));
-    if (last && Math.abs(last.t - t) < 60000 && !fresh) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); if (prev) index.push(prev); continue; }
+    // a missing, empty or corrupt price file is rewritten even when Blizzard has nothing new
+    const fresh = !(await readFile(`${dir}/ProfitmancerData.lua`, "utf8").catch(() => "")) || !(await readable(`${dir}/catalog.json`));
+    const prev = oldIndex.houses.find(h => h.key === g.key);
+    if (last && Math.abs(last.t - t) < 60000 && !fresh && prev) { console.log(`${g.label}: no new data since ${new Date(t).toISOString()}`); const { missingSince, ...p } = prev; index.push(p); continue; }
     const prices = priceTable(auctions);
     const items = {}; for (const id in prices) if (tracked.has(id)) items[id] = [prices[id][2], prices[id][0]];
     if (!(last && Math.abs(last.t - t) < 60000)) snapsFile.snaps.push({ t, items });
     snapsFile.snaps = snapsFile.snaps.filter(s => s.t >= t - KEEP_DAYS * 86400000).sort((a, b) => a.t - b.t);
-    // Quantities of EVERY item over the last 26 h, so 24 h sales exist for the whole catalog (not only the Grimoire's items)
+    // Quantities of EVERY item over the last 26 h, so 24 h sales exist for the whole catalog (not only Profitmancer's items)
     const qbuf = await readJson(`${dir}/qty24.json`, { v: 1, snaps: [] });
     if (!qbuf.snaps.some(x => Math.abs(x.t - t) < 60000)) { const q = {}; for (const id in prices) q[id] = [prices[id][2]]; qbuf.snaps.push({ t, items: q }); }
     qbuf.snaps = qbuf.snaps.filter(x => x.t >= t - 26 * 3600000).sort((a, b) => a.t - b.t);
@@ -257,31 +288,46 @@ for (const g of groups) {
       await writeFile("data/latest.json", JSON.stringify(latest));
       await writeFile("data/snaps.json", JSON.stringify(snapsFile));
     }
-    index.push({ key: g.key, rs: g.rs, faction: g.faction, ruleset: g.ruleset, rulesets: g.rulesets, name: g.name, label: g.label, labelFr: g.labelFr, ah: g.ids, t, count: auctions.length, scans: snapsFile.snaps.length });
-    console.log(`${g.label}: ${auctions.length} auctions, ${Object.keys(items).length} Grimoire items, data from ${new Date(t).toISOString()}, ${snapsFile.snaps.length} scans.`);
+    index.push(entry(g, t, auctions.length, snapsFile.snaps.length));
+    console.log(`${g.label}: ${auctions.length} auctions, ${Object.keys(items).length} Profitmancer items, data from ${new Date(t).toISOString()}, ${snapsFile.snaps.length} scans.`);
   } catch (e) {
-    failures++; console.log(`${g.label}: FAILED ${e.message}`);
-    const prev = oldIndex.houses.find(h => h.key === g.key); if (prev) index.push(prev);
+    failures++; console.log(`::error::${g.label}: FAILED ${e.message}`);
+    await keepPrevious(g);
   }
 }
 if (!index.length) throw new Error("No auction house could be scanned: check the Blizzard secrets.");
-try { await itemMeta(tok, index); } catch (e) { console.log("Item names: " + e.message); }
+// A market Blizzard did not list this time (one refused call, a temporary omission...) keeps its entry and files
+// for KEEP_DAYS days (marked "missingSince") before being dropped, instead of losing its history at once.
+for (const h of oldIndex.houses) {
+  if (index.some(x => x.key === h.key) || groups.some(g => g.key === h.key)) continue;
+  const since = h.missingSince || Date.now();
+  if (Date.now() - since < KEEP_DAYS * 86400000) { index.push({ ...h, missingSince: since }); console.log(`::warning::${h.label}: not listed by Blizzard since ${new Date(since).toISOString()}, previous data kept.`); }
+  else console.log(`::warning::${h.label}: not listed by Blizzard for ${KEEP_DAYS} days, removed.`);
+}
+try { await itemMeta(tok, index); } catch (e) { console.log("::warning::Item names: " + e.message); }
 // One file per faction with every server type (see luaFaction), at the keys updaters installed before Nov 2026 use
 const factions = [];
 for (const f in LEGACY) {
-  const list = [];
-  for (const m of MARKETS) {
-    const h = index.find(x => x.rs === m.rs && x.faction === f); if (!h) continue;
-    const c = await readJson(`data/ah/${h.key}/catalog.json`, null); if (!c) continue;
-    list.push({ rs: m.rs, faction: f, label: h.label, t: c.t, items: c.items });
+  try {
+    const list = [];
+    for (const m of MARKETS) {
+      const h = index.find(x => x.rs === m.rs && x.faction === f); if (!h) continue;
+      const c = await readJson(`data/ah/${h.key}/catalog.json`, null); if (!c) continue;
+      list.push({ rs: m.rs, faction: f, label: h.label, t: c.t, items: c.items });
+    }
+    if (!list.length) continue;
+    const dir = `data/ah/${LEGACY[f]}`;
+    // keep only the two price files there (the old merged history is meaningless now)
+    await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
+    await writeFile(`${dir}/ProfitmancerData.lua`, luaFaction(LEGACY[f], list));
+    // DEPRECATED: compat anciens addons (nom d'origine), à retirer quand plus utilisé
+    await writeFile(`${dir}/GrimoireData.lua`, luaFaction(LEGACY[f], list, "GrimoireData")); // addon's former name
+    factions.push({ key: LEGACY[f], faction: f, label: FACTIONS[f], labelFr: FACTION_FR[f], rs: list.map(m => m.rs) });
+  } catch (e) {
+    // keep last run's faction file (and its index entry) rather than publishing nothing
+    failures++; console.log(`::error::${FACTIONS[f]} (every server type): FAILED ${e.message}`);
+    const old = (oldIndex.factions || []).find(x => x.key === LEGACY[f]); if (old) factions.push(old);
   }
-  if (!list.length) continue;
-  const dir = `data/ah/${LEGACY[f]}`;
-  // keep only the two price files there (the old merged history is meaningless now)
-  await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
-  await writeFile(`${dir}/ProfitmancerData.lua`, luaFaction(LEGACY[f], list));
-  await writeFile(`${dir}/GrimoireData.lua`, luaFaction(LEGACY[f], list, "GrimoireData")); // addon's former name
-  factions.push({ key: LEGACY[f], faction: f, label: FACTIONS[f], labelFr: FACTION_FR[f], rs: list.map(m => m.rs) });
 }
 // Remove the folders of auction houses that are no longer scanned
 for (const d of await readdir("data/ah").catch(() => [])) if (!index.some(h => h.key === d) && !factions.some(h => h.key === d)) await rm(`data/ah/${d}`, { recursive: true, force: true });

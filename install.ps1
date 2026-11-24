@@ -3,7 +3,10 @@
 # It downloads the Profitmancer package from GitHub, then runs its installer: it finds WoW Forever, asks for your
 # auction house and schedules a hidden price update every 15 minutes. Nothing is sent anywhere.
 & {
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  # add TLS 1.2 to what Windows PowerShell 5.1 allows (without removing TLS 1.3 where it exists)
+  [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+  # the progress bar makes Invoke-WebRequest many times slower in Windows PowerShell 5.1
+  $ProgressPreference = "SilentlyContinue"
   $zipUrl = "https://raw.githubusercontent.com/DoubleVB/grimoire-ah/main/Profitmancer-WoW-Forever.zip"
   $tmp = Join-Path $env:TEMP ("Profitmancer-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
   try {
@@ -11,7 +14,8 @@
     Write-Host ""
     Write-Host "  Profitmancer: downloading the price updater..." -ForegroundColor Magenta
     $zip = Join-Path $tmp "Profitmancer.zip"
-    Invoke-WebRequest -UseBasicParsing $zipUrl -OutFile $zip -ErrorAction Stop
+    Invoke-WebRequest -UseBasicParsing $zipUrl -OutFile $zip -TimeoutSec 120 -ErrorAction Stop
+    Write-Host ("  SHA256 " + (Get-FileHash $zip -Algorithm SHA256).Hash) -ForegroundColor DarkGray
     Expand-Archive -Path $zip -DestinationPath $tmp -Force -ErrorAction Stop
     $inst = Get-ChildItem $tmp -Recurse -Filter "Install-Profitmancer.ps1" | Select-Object -First 1
     if (-not $inst) { throw "Install-Profitmancer.ps1 not found in the download." }
