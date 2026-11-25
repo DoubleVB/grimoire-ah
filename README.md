@@ -7,11 +7,12 @@ Make gold with your professions and the auction house on **WoW Forever**.
 
 ## What's new in 1.3.8
 
-- Minimap tooltip: more compact, with a new line for the items you have listed at the AH and their total value.
+- **Sale notifications:** a message tells you what sold and for how much (optional dedicated chat tab, Test button in the options).
+- **Export straight to your shopping lists:** the recipe goes into your AH shopping lists with a confirmation pop-up (Shift+click: Auctionator copy window).
+- **Minimap tooltip:** more compact, with the items you have listed at the AH and their total value.
 - Smaller red cooldown counter, round and centered glow on the minimap icon.
-- Export button: the recipe goes straight into your AH shopping lists, with a confirmation pop-up (Shift+click: Auctionator copy window).
 
-Older versions: [`releases/CHANGELOG.md`](releases/CHANGELOG.md).
+Older versions: [`releases/discord/discord-posts.txt`](releases/discord/discord-posts.txt).
 
 ## The 3 parts
 

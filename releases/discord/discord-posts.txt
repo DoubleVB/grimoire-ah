@@ -1,0 +1,53 @@
+Profitmancer: release posts (Discord / CurseForge changelog)
+Newest first. Copy the block of a version as is.
+Template: title "# Profitmancer X is out", **New**, **Fixes & improvements**, footer.
+Rule: short, one idea per line, no jargon, bold the feature name.
+Add each new version at the top, below this header.
+
+==================================================
+
+# Profitmancer 1.3.8 is out
+
+**New**
+- **Sale notifications**: when an auction sells, a message tells you what sold and for how much (listed price, before the AH cut). Optional dedicated chat tab and a Test button in the options (`/pfm options`).
+- **Export straight to your shopping lists**: the Export button in the profession window sends the recipe's reagents to your AH shopping lists, with a confirmation pop-up in the middle of the screen. Shift+click still opens the copy window for Auctionator.
+- **Listed items on the minimap tooltip**: how many items you have for sale at the AH (all your characters) and their total value.
+
+**Fixes & improvements**
+- Minimap tooltip is more compact and easier to read.
+- Smaller red cooldown counter; the yellow glow on the minimap icon is now round and centered.
+
+Update via CurseForge · Website: https://doublevb.github.io/grimoire-ah/
+
+==================================================
+
+# Profitmancer 1.3.7 is out
+
+**New**
+- **Server types**: Profitmancer detects your server type (PvP, Normal, RP, RP-PvP) and uses the prices of that market.
+- Cooldowns of characters on another server type are no longer mixed in; each character shows its server type in the options.
+
+**Fixes & improvements**
+- The options window shows which market the prices come from and warns you when they come from another server type.
+- Clearer texts about price updates: Blizzard publishes prices once an hour, the updater fetches them within 15 min.
+- The in-game guide is updated.
+
+Update via CurseForge · Website: https://doublevb.github.io/grimoire-ah/
+
+==================================================
+
+# Profitmancer 1.3.6 is out
+
+**New**
+- **Craft cooldowns** for every profession (transmutes, Mooncloth, Salt Shaker...): a notification when one is ready, a counter on the minimap button, and every character's cooldowns in its tooltip. Shared cooldowns are detected automatically.
+- **Options window**: right-click the minimap button (or `/pfm options`). Tooltip lines, profession window display, notification position/sound/duration, AH tabs, window size, sales history length, characters followed, website links.
+- **Skill-up chance**: the % chance of a skill point is shown next to each recipe.
+- Recipes on cooldown show a tick or the time left in the profession window.
+
+**Fixes & improvements**
+- Item icons in the Sales history now work for every item (full WoW Forever catalog, EN/FR).
+- Export button moved next to "Track Recipe", never covers text anymore.
+- Smoother scrolling in the recipe list, lighter on performance.
+- The in-game guide is updated with the new features.
+
+Update via CurseForge · Website: https://doublevb.github.io/grimoire-ah/
