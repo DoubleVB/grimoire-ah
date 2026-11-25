@@ -1,0 +1,2 @@
+-- Profitmancer price data. Empty in this download: the addon uses your Auctionator scans.
+-- For prices every 15 minutes and 24 h sales of every item, see the project page (optional price updater).

@@ -1,0 +1,27 @@
+## Interface: 16001
+## Title: |cffb48cffProfitmancer|r
+## Notes: Crafting profit, market price (EMV), 24 h sales and vendor prices in item tooltips. Hold Shift for details.
+## Notes-frFR: Profit de craft, prix marché (EMV), ventes 24 h et prix PNJ dans l'infobulle des objets. Maj pour le détail.
+## Author: Workby
+## Version: 1.4.0
+## OptionalDeps: Auctionator
+## SavedVariables: ProfitmancerDB
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
+## X-Website: https://doublevb.github.io/grimoire-ah/grimoire-alchimiste.html
+## X-Category: Auction
+
+Static.lua
+Names.lua
+ProfitmancerData.lua
+Profitmancer.lua
+Character.lua
+Gains.lua
+AHTab.lua
+Sales.lua
+Shop.lua
+Levels.lua
+RecipeProfit.lua
+Cooldowns.lua
+Options.lua
+Shopping.lua
+Tutorial.lua
