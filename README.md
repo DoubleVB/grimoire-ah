@@ -5,6 +5,14 @@ Make gold with your professions and the auction house on **WoW Forever**.
 - **Addon:** [CurseForge](https://www.curseforge.com/wow/addons/profitmancer)
 - **Website:** [doublevb.github.io/grimoire-ah](https://doublevb.github.io/grimoire-ah/)
 
+## What's new in 1.3.8
+
+- Minimap tooltip: more compact, with a new line for the items you have listed at the AH and their total value.
+- Smaller red cooldown counter, round and centered glow on the minimap icon.
+- Export button: the recipe goes straight into your AH shopping lists, with a confirmation pop-up (Shift+click: Auctionator copy window).
+
+Older versions: [`releases/CHANGELOG.md`](releases/CHANGELOG.md).
+
 ## The 3 parts
 
 | Part | Role |
@@ -29,7 +37,7 @@ One line in PowerShell:
 irm https://doublevb.github.io/grimoire-ah/install.ps1 | iex
 ```
 
-Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoire-ah/raw/main/Profitmancer-WoW-Forever.zip), extract it and run `Installer-Profitmancer.bat`.
+Or download [`Profitmancer-WoW-Forever.zip`](https://github.com/DoubleVB/grimoire-ah/raw/main/releases/github/Profitmancer-WoW-Forever.zip), extract it and run `Installer-Profitmancer.bat`.
 Prices reload at login, on `/reload` or on a left click on the minimap button.
 
 ## How it works
@@ -59,4 +67,4 @@ GitHub pauses scheduled workflows after 60 days of inactivity: click *Enable wor
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): planned work
 - [`docs/SECURITE.md`](docs/SECURITE.md): security
 - [`docs/MIGRATION-GRIMOIRE.md`](docs/MIGRATION-GRIMOIRE.md): migrating from Grimoire
-- [`AUDIT.md`](AUDIT.md): detailed audit
+- [`AUDIT.md`](docs/AUDIT.md): detailed audit

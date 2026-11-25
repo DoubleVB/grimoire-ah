@@ -7,7 +7,7 @@
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
   # the progress bar makes Invoke-WebRequest many times slower in Windows PowerShell 5.1
   $ProgressPreference = "SilentlyContinue"
-  $zipUrl = "https://raw.githubusercontent.com/DoubleVB/grimoire-ah/main/Profitmancer-WoW-Forever.zip"
+  $zipUrl = "https://raw.githubusercontent.com/DoubleVB/grimoire-ah/main/releases/github/Profitmancer-WoW-Forever.zip"
   $tmp = Join-Path $env:TEMP ("Profitmancer-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
   try {
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null

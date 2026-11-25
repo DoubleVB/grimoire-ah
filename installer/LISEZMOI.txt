@@ -1,0 +1,32 @@
+PROFITMANCER - addon WoW Forever (prix HV, profit de craft, PNJ)
+
+INSTALLATION
+1. Dezippe ce dossier n'importe ou.
+2. Double-clique sur Installer-Profitmancer.bat
+   - il trouve WoW Forever (ou te demande le dossier _forever_),
+   - il copie l'addon dans Interface\AddOns\Profitmancer,
+   - il te demande ton hotel des ventes (royaume + faction),
+   - il recupere les nouveaux prix tout seul (Blizzard les publie une fois par heure,
+     le programme verifie toutes les 15 minutes), PC allume, sans rien ouvrir.
+   Si Windows affiche "Windows a protege votre ordinateur" : "Informations complementaires" puis "Executer quand meme".
+3. En jeu : /reload pour charger les derniers prix.
+
+EN JEU
+- Une ligne "Profitmancer" dans l'infobulle des objets :
+  objet fabrique = profit par craft (marge) et ventes par jour,
+  composant = prix marche (EMV) et ventes par jour,
+  composant moins cher chez un PNJ = prix PNJ en vert.
+- Maintiens Maj (Shift) pour le detail : prix, cout du craft, PNJ et position, meilleur usage.
+- Bouton sur la minicarte : clic gauche = charger les derniers prix (recharge l'interface), clic droit = etat, glisser = deplacer.
+- Un rappel s'affiche dans le chat quand les prix charges ont plus d'une heure.
+- /pfm reload : charger les derniers prix.  /pfm : etat des donnees.  /pfm detail : toujours le detail.  /pfm off / on.
+- Sans le programme de mise a jour, l'addon utilise les prix de tes scans Auctionator.
+
+CHANGER D'HOTEL DES VENTES : relance Installer-Profitmancer.bat.
+TOUT ARRETER : Desinstaller-Profitmancer.bat (puis supprime Interface\AddOns\Profitmancer).
+Journal des mises a jour : %LOCALAPPDATA%\Profitmancer\update.log
+Site : https://doublevb.github.io/grimoire-ah/grimoire-alchimiste.html
+
+Remplace l'ancienne version "Grimoire" automatiquement.
+
+Les prix viennent d'un scan horaire de l'API Blizzard publie sur GitHub (donnees publiques, rien n'est envoye depuis ton PC).
