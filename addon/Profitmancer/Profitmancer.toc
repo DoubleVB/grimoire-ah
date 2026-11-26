@@ -3,7 +3,7 @@
 ## Notes: Crafting profit, market price (EMV), 24 h sales and vendor prices in item tooltips. Hold Shift for details.
 ## Notes-frFR: Profit de craft, prix marchÃ© (EMV), ventes 24 h et prix PNJ dans l'infobulle des objets. Maj pour le dÃ©tail.
 ## Author: Workby
-## Version: 1.3.8
+## Version: 1.3.9
 ## OptionalDeps: Auctionator
 ## SavedVariables: ProfitmancerDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_02

@@ -5,7 +5,14 @@ Make gold with your professions and the auction house on **WoW Forever**.
 - **Addon:** [CurseForge](https://www.curseforge.com/wow/addons/profitmancer)
 - **Website:** [doublevb.github.io/grimoire-ah](https://doublevb.github.io/grimoire-ah/)
 
-## What's new in 1.3.8
+## What's new in 1.3.9
+
+- **On-screen sale notification:** a pop-up like the cooldown one shows what sold and for how much (sound, Move and Test buttons).
+- **Your choice in the options:** sale text in the general chat, in a Profitmancer tab or not in chat, with or without the pop-up.
+- **Clearer sale messages:** item icon and clickable coloured name, coins lined up with the text, shorter wording. They keep their look after a `/reload` with chat history addons.
+- **Sale notifications** now show up reliably. New `/pfm gains saletest` command to test the display.
+
+### 1.3.8
 
 - **Sale notifications:** a message tells you what sold and for how much (optional dedicated chat tab, Test button in the options).
 - **Export straight to your shopping lists:** the recipe goes into your AH shopping lists with a confirmation pop-up (Shift+click: Auctionator copy window).

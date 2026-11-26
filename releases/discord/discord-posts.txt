@@ -6,6 +6,22 @@ Add each new version at the top, below this header.
 
 ==================================================
 
+# Profitmancer 1.3.9 is out
+
+**New**
+- **On-screen sale notification:** a pop-up like the cooldown one shows what sold and for how much, with sound, Move and Test buttons.
+- **Your choice in the options:** sale text in the general chat, in a Profitmancer tab or not in chat, with or without the pop-up.
+
+**Fixes & improvements**
+- **Clearer sale messages:** item icon and clickable coloured name, coins lined up with the text, shorter wording.
+- Sale messages keep their look after a `/reload` with chat history addons.
+- **Sale notifications** now show up reliably: when an auction sells, you get the message with the item, quantity and price.
+- New `/pfm gains saletest` command to check that the notification displays.
+
+Update via CurseForge · Website: https://doublevb.github.io/grimoire-ah/
+
+==================================================
+
 # Profitmancer 1.3.8 is out
 
 **New**

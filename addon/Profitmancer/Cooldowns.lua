@@ -325,16 +325,16 @@ local toast, queue = nil, {}
 local function openProf(prof)
 	if prof and C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill then pcall(C_TradeSkillUI.OpenTradeSkill, prof) end
 end
-local function makeToast()
-	if toast then return end
-	toast = CreateFrame("Button", "ProfitmancerCooldownToast", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+-- The notification frame itself, also used for auction sales (Gains.lua). The caller sets OnClick and OnEnter.
+function ProfitmancerMakeToast(frameName, posKey)
+	local toast = CreateFrame("Button", frameName, UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 	toast:SetSize(330, 66); toast:SetFrameStrata("DIALOG"); toast:SetClampedToScreen(true)
 	toast:SetMovable(true); toast:RegisterForDrag("LeftButton")
 	toast:SetScript("OnDragStart", function(self) if self.unlocked then self:StartMoving() end end)
 	toast:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
 		local x, y = self:GetCenter(); local ux, uy = UIParent:GetCenter()
-		if x and ux then ProfitmancerDB.cdToastPos = { math.floor(x - ux + 0.5), math.floor(y - uy + 0.5) } end
+		if x and ux then ProfitmancerDB[posKey] = { math.floor(x - ux + 0.5), math.floor(y - uy + 0.5) } end
 	end)
 	if toast.SetBackdrop then
 		toast:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
@@ -346,11 +346,6 @@ local function makeToast()
 	toast.title = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal"); toast.title:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 10, -2); toast.title:SetPoint("RIGHT", -10, 0); toast.title:SetJustifyH("LEFT")
 	toast.text = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); toast.text:SetPoint("TOPLEFT", toast.title, "BOTTOMLEFT", 0, -4); toast.text:SetPoint("RIGHT", -10, 0); toast.text:SetJustifyH("LEFT"); toast.text:SetWordWrap(false)
 	toast:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	toast:SetScript("OnClick", function(self, b)
-		if self.unlocked then if b == "RightButton" then self.unlocked = false; self.hold = false; self:Hide() end return end
-		if b ~= "RightButton" then openProf(self.prof) end; self:Hide()
-	end)
-	toast:SetScript("OnEnter", function(self) self.hold = true; self:SetAlpha(1); GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:AddLine(T.click, 1, 1, 1); GameTooltip:Show() end)
 	toast:SetScript("OnLeave", function(self) if not self.unlocked then self.hold = false end; GameTooltip:Hide() end)
 	toast:SetScript("OnUpdate", function(self, el)
 		if self.hold then return end
@@ -362,6 +357,16 @@ local function makeToast()
 		end
 	end)
 	toast:Hide()
+	return toast
+end
+local function makeToast()
+	if toast then return end
+	toast = ProfitmancerMakeToast("ProfitmancerCooldownToast", "cdToastPos")
+	toast:SetScript("OnClick", function(self, b)
+		if self.unlocked then if b == "RightButton" then self.unlocked = false; self.hold = false; self:Hide() end return end
+		if b ~= "RightButton" then openProf(self.prof) end; self:Hide()
+	end)
+	toast:SetScript("OnEnter", function(self) self.hold = true; self:SetAlpha(1); GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:AddLine(T.click, 1, 1, 1); GameTooltip:Show() end)
 end
 local function busy()
 	if InCombatLockdown and InCombatLockdown() then return true end

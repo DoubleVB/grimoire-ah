@@ -14,6 +14,11 @@ WoW Forever (Interface 16001)
 
 ## Description
 
+### What's new in 1.3.9
+- On-screen notification when an auction sells (sound, movable, can be turned off).
+- Choose where the sale text goes: general chat, a Profitmancer tab, or nowhere.
+- Sale messages show the item icon and a clickable name, and keep their look after a `/reload`.
+
 **Profitmancer adds three short lines to every item tooltip, so you know at a glance what an item is worth and whether crafting it pays off.**
 
 - **Vendor** – what an NPC sells it for (in green when that is cheaper than the auction house), otherwise what an NPC pays you for it.

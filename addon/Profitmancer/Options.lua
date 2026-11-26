@@ -9,7 +9,7 @@ local T = FR and {
 	priceNote = "Blizzard publie les prix une fois par heure ; le programme de mise à jour (Windows) les télécharge en moins de 15 min. Le jeu les lit au chargement : clic gauche sur le bouton de la minicarte (ou /reload) pour prendre les plus récents.",
 	noPrices = "Pas encore de prix cloud", from = "%s · prix d'il y a %s",
 	secCd = "Cooldowns de craft", toast = "Notification quand un cooldown est prêt", sound = "Son de la notification", dur = "Affichage : %d s", test = "Tester", move = "Déplacer", resetPos = "Position par défaut", badge = "Compteur sur le bouton minimap",
-	secSale = "Ventes à l'HV", saleTab = "Notifier les ventes dans un onglet de chat dédié", saleTest = "Tester",
+	secSale = "Ventes à l'HV", saleChat = { chat = "Texte : chat général", tab = "Texte : onglet Profitmancer", off = "Texte : pas dans le chat" }, saleToast = "Notification à l'écran à chaque vente",
 	secMm = "Bouton de la minicarte", mm = "Afficher le bouton (sinon : /pfm minimap)",
 	secLinks = "Liens", lSite = "Site Profitmancer", lUpdater = "Installer les prix auto", lCF = "Page CurseForge", lGit = "GitHub (code et données)", copy = "Copier", copyHint = "Ctrl+C pour copier, puis colle l'adresse dans ton navigateur",
 	rpMin = "Profit affiché à partir de : %s", all = "tous",
@@ -24,7 +24,7 @@ local T = FR and {
 	priceNote = "Blizzard publishes prices once an hour; the price updater (Windows) downloads them within 15 min. The game reads them when it loads: left-click the minimap button (or /reload) to take the latest.",
 	noPrices = "No cloud prices yet", from = "%s · prices from %s ago",
 	secCd = "Craft cooldowns", toast = "Notification when a cooldown is ready", sound = "Notification sound", dur = "Shown for: %d s", test = "Test", move = "Move", resetPos = "Default position", badge = "Counter on the minimap button",
-	secSale = "Auction house sales", saleTab = "Notify sales in a dedicated chat tab", saleTest = "Test",
+	secSale = "Auction house sales", saleChat = { chat = "Text: general chat", tab = "Text: Profitmancer tab", off = "Text: not in chat" }, saleToast = "On-screen notification for each sale",
 	secMm = "Minimap button", mm = "Show the button (else: /pfm minimap)",
 	secLinks = "Links", lSite = "Profitmancer website", lUpdater = "Install automatic prices", lCF = "CurseForge page", lGit = "GitHub (code and data)", copy = "Copy", copyHint = "Ctrl+C to copy, then paste the address in your web browser",
 	rpMin = "Show profit from: %s", all = "all",
@@ -200,11 +200,20 @@ local function build()
 	check(2, T.badge, function() return not DB().cdBadgeOff end, function(v) DB().cdBadgeOff = not v or nil; if ProfitmancerCooldowns then ProfitmancerCooldowns.badge() end end)
 
 	section(2, T.secSale)
-	check(2, T.saleTab, function() return DB().saleTab == true end, function(v) DB().saleTab = v or nil; if ProfitmancerSaleTab then ProfitmancerSaleTab(v) end end)
+	cycle(2, { "chat", "tab", "off" }, function() return DB().saleChat or (DB().saleTab and "tab") or "chat" end,
+		function(v) DB().saleChat = v; DB().saleTab = nil; if ProfitmancerSaleTab then ProfitmancerSaleTab(v == "tab") end end,
+		function(v) return T.saleChat[v] end)
+	check(2, T.saleToast, function() return not DB().saleToastOff end, function(v) DB().saleToastOff = not v or nil end)
+	check(2, T.sound, function() return not DB().saleSoundOff end, function(v) DB().saleSoundOff = not v or nil end)
 	do
 		local x, y = nextPos(2, 28)
-		local t = button(w, T.saleTest, 90, function() if ProfitmancerSaleTest then ProfitmancerSaleTest() end end)
+		local t = button(w, T.test, 90, function() if ProfitmancerSaleTest then ProfitmancerSaleTest() end end)
 		t:SetPoint("TOPLEFT", x, y)
+		local x2, y2 = nextPos(2, 28)
+		local m = button(w, T.move, 110, function() if ProfitmancerSaleMove then ProfitmancerSaleMove() end end)
+		m:SetPoint("TOPLEFT", x2, y2)
+		local r = button(w, T.resetPos, 150, function() if ProfitmancerSaleResetPos then ProfitmancerSaleResetPos() end end)
+		r:SetPoint("LEFT", m, "RIGHT", 6, 0)
 	end
 
 	section(2, T.secMm)
