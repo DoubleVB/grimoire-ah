@@ -1,0 +1,260 @@
+{
+ "v": 2,
+ "t": 1795869000683,
+ "houses": [
+  {
+   "key": "pvp-alliance",
+   "rs": "PvP",
+   "faction": "alliance",
+   "ruleset": 1,
+   "rulesets": [
+    "PvP"
+   ],
+   "name": "Alliance · PvP",
+   "label": "Alliance · PvP",
+   "labelFr": "Alliance · JcJ",
+   "ah": [
+    "110"
+   ],
+   "t": 1795868532000,
+   "count": 275652,
+   "scans": 103
+  },
+  {
+   "key": "pvp-horde",
+   "rs": "PvP",
+   "faction": "horde",
+   "ruleset": 1,
+   "rulesets": [
+    "PvP"
+   ],
+   "name": "Horde · PvP",
+   "label": "Horde · PvP",
+   "labelFr": "Horde · JcJ",
+   "ah": [
+    "113"
+   ],
+   "t": 1795868534000,
+   "count": 297334,
+   "scans": 103
+  },
+  {
+   "key": "pvp-blackwater",
+   "rs": "PvP",
+   "faction": "blackwater",
+   "ruleset": 1,
+   "rulesets": [
+    "PvP"
+   ],
+   "name": "Blackwater · PvP",
+   "label": "Blackwater · PvP",
+   "labelFr": "Eaux-Noires · JcJ",
+   "ah": [
+    "116"
+   ],
+   "t": 1795868508000,
+   "count": 43466,
+   "scans": 103
+  },
+  {
+   "key": "pve-alliance",
+   "rs": "PvE",
+   "faction": "alliance",
+   "ruleset": 1,
+   "rulesets": [
+    "Normal"
+   ],
+   "name": "Alliance · Normal",
+   "label": "Alliance · Normal",
+   "labelFr": "Alliance · Normal",
+   "ah": [
+    "111"
+   ],
+   "t": 1795868533000,
+   "count": 291986,
+   "scans": 103
+  },
+  {
+   "key": "pve-horde",
+   "rs": "PvE",
+   "faction": "horde",
+   "ruleset": 1,
+   "rulesets": [
+    "Normal"
+   ],
+   "name": "Horde · Normal",
+   "label": "Horde · Normal",
+   "labelFr": "Horde · Normal",
+   "ah": [
+    "114"
+   ],
+   "t": 1795868532000,
+   "count": 273209,
+   "scans": 103
+  },
+  {
+   "key": "pve-blackwater",
+   "rs": "PvE",
+   "faction": "blackwater",
+   "ruleset": 1,
+   "rulesets": [
+    "Normal"
+   ],
+   "name": "Blackwater · Normal",
+   "label": "Blackwater · Normal",
+   "labelFr": "Eaux-Noires · Normal",
+   "ah": [
+    "117"
+   ],
+   "t": 1795868508000,
+   "count": 52432,
+   "scans": 103
+  },
+  {
+   "key": "rp-alliance",
+   "rs": "RP",
+   "faction": "alliance",
+   "ruleset": 1,
+   "rulesets": [
+    "RP"
+   ],
+   "name": "Alliance · RP",
+   "label": "Alliance · RP",
+   "labelFr": "Alliance · RP",
+   "ah": [
+    "119"
+   ],
+   "t": 1795868508000,
+   "count": 51430,
+   "scans": 103
+  },
+  {
+   "key": "rp-horde",
+   "rs": "RP",
+   "faction": "horde",
+   "ruleset": 1,
+   "rulesets": [
+    "RP"
+   ],
+   "name": "Horde · RP",
+   "label": "Horde · RP",
+   "labelFr": "Horde · RP",
+   "ah": [
+    "120"
+   ],
+   "t": 1795868506000,
+   "count": 31648,
+   "scans": 103
+  },
+  {
+   "key": "rp-blackwater",
+   "rs": "RP",
+   "faction": "blackwater",
+   "ruleset": 1,
+   "rulesets": [
+    "RP"
+   ],
+   "name": "Blackwater · RP",
+   "label": "Blackwater · RP",
+   "labelFr": "Eaux-Noires · RP",
+   "ah": [
+    "121"
+   ],
+   "t": 1795868503000,
+   "count": 2125,
+   "scans": 103
+  },
+  {
+   "key": "rppvp-alliance",
+   "rs": "RPPvP",
+   "faction": "alliance",
+   "ruleset": 1,
+   "rulesets": [
+    "RP-PvP"
+   ],
+   "name": "Alliance · RP-PvP",
+   "label": "Alliance · RP-PvP",
+   "labelFr": "Alliance · RP-JcJ",
+   "ah": [
+    "123"
+   ],
+   "t": 1795868507000,
+   "count": 38037,
+   "scans": 103
+  },
+  {
+   "key": "rppvp-horde",
+   "rs": "RPPvP",
+   "faction": "horde",
+   "ruleset": 1,
+   "rulesets": [
+    "RP-PvP"
+   ],
+   "name": "Horde · RP-PvP",
+   "label": "Horde · RP-PvP",
+   "labelFr": "Horde · RP-JcJ",
+   "ah": [
+    "124"
+   ],
+   "t": 1795868507000,
+   "count": 36902,
+   "scans": 103
+  },
+  {
+   "key": "rppvp-blackwater",
+   "rs": "RPPvP",
+   "faction": "blackwater",
+   "ruleset": 1,
+   "rulesets": [
+    "RP-PvP"
+   ],
+   "name": "Blackwater · RP-PvP",
+   "label": "Blackwater · RP-PvP",
+   "labelFr": "Eaux-Noires · RP-JcJ",
+   "ah": [
+    "125"
+   ],
+   "t": 1795868503000,
+   "count": 1801,
+   "scans": 103
+  }
+ ],
+ "factions": [
+  {
+   "key": "alliance-auction-house",
+   "faction": "alliance",
+   "label": "Alliance",
+   "labelFr": "Alliance",
+   "rs": [
+    "PvP",
+    "PvE",
+    "RP",
+    "RPPvP"
+   ]
+  },
+  {
+   "key": "horde-auction-house",
+   "faction": "horde",
+   "label": "Horde",
+   "labelFr": "Horde",
+   "rs": [
+    "PvP",
+    "PvE",
+    "RP",
+    "RPPvP"
+   ]
+  },
+  {
+   "key": "blackwater-auction-house",
+   "faction": "blackwater",
+   "label": "Blackwater",
+   "labelFr": "Eaux-Noires",
+   "rs": [
+    "PvP",
+    "PvE",
+    "RP",
+    "RPPvP"
+   ]
+  }
+ ]
+}
